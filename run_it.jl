@@ -1,6 +1,6 @@
-using ParallelStencil, Printf, LinearAlgebra, Statistics, PyPlot
+using ParallelStencil, Printf, LinearAlgebra, Statistics, PyPlot, Infiltrator
 
-const USE_GPU = false
+const USE_GPU = true
 # Initiate ParallelStencil
 @static if USE_GPU
     @init_parallel_stencil(CUDA, Float64, 2)
@@ -9,19 +9,19 @@ else
 end
 
 α = 1.25; β = 1.5
-nx = 64; ny = 64
+nx = 64; ny = 32
 γ_ϕ = 0.8; γ_h = 0.8
 dτ_ϕ_=1.0; dτ_h_= 7e-6
 
-plot_output = false; plot_error = false;
+plot_output = true; plot_error = true;
 
 small = eps(Float64)
 
 macro N(ix, iy) esc(:(0.91*H[$ix, $iy] - ϕ[$ix, $iy])) end
 macro vo(ix, iy) esc(:( h[$ix, $iy] < 1. ? 1 - h[$ix, $iy] : 0.)) end
 macro vc(ix, iy) esc(:(h[$ix, $iy] * @N($ix, $iy)^3)) end
-macro dϕ_dx(ix, iy) esc(:( (ix == 1 || ix == nx-1) ? 0. : (ϕ[$ix+1, $iy] - ϕ[$ix, $iy]) / dx)) end
-macro dϕ_dy(ix, iy) esc(:( (iy == 1 || iy == ny-1) ? 0. : (ϕ[$ix, $iy+1] - ϕ[$ix, $iy]) / dy )) end
+macro dϕ_dx(ix, iy) esc(:( ($ix == 1 || $ix == nx-1) ? 0. : (ϕ[$ix+1, $iy] - ϕ[$ix, $iy]) / dx)) end
+macro dϕ_dy(ix, iy) esc(:( ($iy == 1 || $iy == ny-1) ? 0. : (ϕ[$ix, $iy+1] - ϕ[$ix, $iy]) / dy )) end
 macro gradϕ(ix, iy) esc(:( sqrt(
     (0.5 * (@dϕ_dx($ix, $iy) + @dϕ_dx($ix-1, $iy)))^2
   + (0.5 * (@dϕ_dy($ix, $iy) + @dϕ_dy($ix, $iy-1)))^2
@@ -57,7 +57,7 @@ macro Res_h(ix, iy) esc(:(( H[$ix, $iy] > 0.) * (
     return
 end
 @parallel_indices (ix,iy) function residuals!(ϕ, ϕ_old, h, h_old, Res_ϕ, Res_h, Λ, Σ, Γ, d_eff,
-                                              dx, dy, min_dxy2, α, β, dt, H, small, e_v)
+                                              dx, dy, α, β, dt, H, small, e_v)
     nx, ny = size(ϕ)
     if (ix <= nx && iy <= ny)
         # residual of ϕ
@@ -100,8 +100,9 @@ xc = LinRange(-dx, Lx+dx, nx); yc = LinRange(-dy, Ly+dy, ny)
 get_H(x, y) = 6 *( sqrt((x)+5e3) - sqrt(5e3) ) + 1
 H = [0.0; ones(nx-2); 0.0] * [0.0 ones(ny-2)' 0.0] .* get_H.(xc, yc') # ice thickness, rectangular ice sheet with ghostpoints
 m = 7.93e-11                           # source term for SHMIP A1 test case
+e_v = 1e-3                             # void ratio for englacial storage
 
-ϕ0 = @zeros(nx, ny); h0 = 0.5 * @ones(nx, ny) # initial fields of ϕ and h
+ϕ0 = 100. * @ones(nx, ny); h0 = 0.04 * @ones(nx, ny) # initial fields of ϕ and h
 
 # scaling factors
 ϕ_ = 9.81 * 910 * mean(H)
@@ -120,7 +121,8 @@ dy = dy / x_
 dt = dt / t_
 H  = Data.Array(H ./ mean(H))
 
-function run_the_model(ϕ0, h0, nx, ny, dx, dy, dt, H, Σ, Γ, Λ, small, e_v, γ_ϕ, γ_h, dτ_h_, dτ_ϕ_)
+function run_the_model(ϕ0, h0, nx, ny, dx, dy, dt, H, Σ, Γ, Λ, small, e_v, γ_ϕ, γ_h, dτ_h_, dτ_ϕ_;
+                       plot_output, plot_error)
     # array allocation
     d_eff = @zeros(nx, ny)
     dϕ_dτ = @zeros(nx, ny); dh_dτ = @zeros(nx, ny)
@@ -132,7 +134,7 @@ function run_the_model(ϕ0, h0, nx, ny, dx, dy, dt, H, Σ, Γ, Λ, small, e_v, �
     h_old = copy(h0); h = copy(h0); h2 = copy(h0)
 
     # Pseudo-transient iteration
-    iter = 0; itMax = 10^5
+    iter = 0; itMax = 10^6
     tol  = 1e-6
     err_ϕ, err_h = 2*tol, 2*tol
     while !(max(err_ϕ, err_h) < tol) && iter<itMax
@@ -149,8 +151,8 @@ function run_the_model(ϕ0, h0, nx, ny, dx, dy, dt, H, Σ, Γ, Λ, small, e_v, �
         # check convergence criterion
         if iter % 1000 == 0
             @parallel residuals!(ϕ, ϕ_old, h, h_old, Res_ϕ, Res_h, Λ, Σ, Γ, d_eff,
-                                 dx, dy, min_dxy2, α, β, dt, H, small, e_v)
-            err_ϕ = norm(Res_ϕ) / length(Res_ϕ) # or length(Res_ϕ) instead of sum(H .> 0.) ??
+                                 dx, dy, α, β, dt, H, small, e_v)
+            err_ϕ = norm(Res_ϕ) / length(Res_ϕ)
             err_h = norm(Res_h) / length(Res_h)
 
             # save error evolution in vector
@@ -164,6 +166,7 @@ function run_the_model(ϕ0, h0, nx, ny, dx, dy, dt, H, Σ, Γ, Λ, small, e_v, �
     if plot_output
         x_plt = [xc[1]; xc .+ (xc[2]-xc[1])]
         y_plt = [yc[1]; yc .+ (yc[2]-yc[1])]
+        N = 0.91 * H .- ϕ
         N[H .== 0.0] .= NaN
         h[H .== 0.0] .= NaN
 
@@ -196,4 +199,5 @@ function run_the_model(ϕ0, h0, nx, ny, dx, dy, dt, H, Σ, Γ, Λ, small, e_v, �
 
 end
 
-run_the_model(ϕ0, h0, nx, ny, dx, dy, dt, H, Σ, Γ, Λ, small, e_v, γ_ϕ, γ_h, dτ_h_, dτ_ϕ_);
+run_the_model(ϕ0, h0, nx, ny, dx, dy, dt, H, Σ, Γ, Λ, small, e_v, γ_ϕ, γ_h, dτ_h_, dτ_ϕ_,
+              plot_output=true, plot_error=true);
