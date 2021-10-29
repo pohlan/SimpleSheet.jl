@@ -1,4 +1,14 @@
-using Printf, LinearAlgebra, Statistics, Plots
+# Solving the sheet using OrdinaryDiffEq solvers (ROCK4)
+#
+# TODO:
+# - try the mass-conservation equation used by B&P as well
+# - try on the GPU
+
+# - also try implicit solvers, but that will be a lot more work
+
+using Printf, LinearAlgebra, Statistics, Plots, Test, RecursiveArrayTools, OrdinaryDiffEq,
+    Infiltrator
+pyplot()
 
 @views   inn(A) = A[2:end-1,2:end-1]
 @views av_xa(A) = (0.5  .* (A[1:end-1,:] .+ A[2:end,:]))
@@ -8,10 +18,8 @@ using Printf, LinearAlgebra, Statistics, Plots
 @views    av(A) = (0.25 .* (A[1:end-1,1:end-1] .+ A[1:end-1,2:end] .+ A[2:end,2:end] .+ A[2:end,1:end-1]))
 
 const small    = eps(Float64)
-plot_out = true
-plot_err = true
 
-@views function simple_sheet()
+function make_ode()
     # physics
     Lx, Ly = 100e3, 20e3                  # length/width of the domain, starts at (0, 0)
     dt     = 1e0                          # physical time step
@@ -53,7 +61,7 @@ plot_err = true
     dt     = dt / t_
     H      = H ./ mean(H)
 
-    # array allocation
+    # array allocationsize(Λ)
     dϕ_dx  = zeros(nx-1,ny  )
     dϕ_dy  = zeros(nx  ,ny-1)
     gradϕ  = zeros(nx-2,ny-2)
@@ -62,20 +70,26 @@ plot_err = true
     flux_y = zeros(nx  ,ny-1)
     vo     = zeros(nx  ,ny  )
     vc     = zeros(nx  ,ny  )
-    dϕdt   = zeros(nx-2,ny-2)
-    dhdt   = zeros(nx  ,ny  )
 
     # initialise all ϕ and h fields
-    ϕ_old = copy(ϕ0); ϕ = copy(ϕ0)
-    h_old = copy(h0); h = copy(h0)
+    ϕ_old = copy(ϕ0)
+    h_old = copy(h0)
 
-    # Time loop
-    iter = 0; dtp= dt * 0.1
-    while iter<itMax
+    ode! = @views function (du,u,p,t)
+        h, ϕ = u.x
+        ## to avoid errors from Complex numbers:
+        h .= max.(h,0)
+        # alternative:
+        #h .= abs.(h)
 
+        # dirichlet boundary conditions to pw = 0
+        ϕ[1:2,:] .= 0.0
+
+        dhdt = du.x[1]
+        dϕdt = du.x[2][2:end-1,2:end-1]
         # d_eff
-        dϕ_dx  .= diff(ϕ,dims=1) ./ dx
-        dϕ_dy  .= diff(ϕ,dims=2) ./ dy
+        dϕ_dx  .= diff(ϕ, dims=1) ./ dx
+        dϕ_dy  .= diff(ϕ, dims=2) ./ dy
 
         dϕ_dx[1,:] .= 0.0; dϕ_dx[end,:] .= 0.0
         dϕ_dy[:,1] .= 0.0; dϕ_dy[:,end] .= 0.0
@@ -93,69 +107,44 @@ plot_err = true
                   .- inn(dhdt)
                   .+ Λ
 
-        # timestep
-        dtnum = e_v .* min(dx,dy)^2 ./ maximum(d_eff) ./ 4.1
-        if iter>2e4 dtp   = 1e1*dtnum end
-
-        # updates
-        ϕ[2:end-1,2:end-1] .= inn(ϕ_old) .+ dtp ./ e_v .* dϕdt
-        h                  .=     h_old  .+ dtp        .* dhdt
-
-        # dirichlet boundary conditions to pw = 0
-        ϕ[1:2,:] .= 0.0
-
-        # update old
-        ϕ_old .= ϕ
-        h_old .= h
-
-        iter += 1
-        # check convergence criterion
-        if iter % nout == 0
-            # visu
-            p1 = heatmap(inn(ϕ)')
-            p2 = heatmap(inn(h)')
-            display(plot(p1, p2))
-            @printf("it %d (dtp = %1.3e, dt = %1.3e, dtnum = %1.3e), max(h) = %1.3f \n", iter, dtp, dt, dtnum, maximum(h))
-        end
+        return nothing
     end
-    return
+    return ode!, ϕ0, h0, (;ϕ_, h_, x_, q_, t_, Σ, Γ, Λ)
 end
 
-simple_sheet()
+ode!, ϕ0, h0, scales = make_ode()
 
-#     pygui(true)
-#     if plot_output
-#         x_plt = [xc[1]; xc .+ (xc[2]-xc[1])]
-#         y_plt = [yc[1]; yc .+ (yc[2]-yc[1])]
-#         N = 0.91 * H .- ϕ
-#         N[H .== 0.0] .= NaN
-#         h[H .== 0.0] .= NaN
+day = 24*3600
+tspan = (0, 0.5day / scales.t_)
+u0 = ArrayPartition(h0, ϕ0)
+du0 = ArrayPartition(copy(h0), copy(ϕ0))
 
-#         figure()
-#         subplot(2, 2, 1)
-#         pcolor(x_plt, y_plt, h')#, edgecolors="black")
-#         colorbar()
-#         title("h")
-#         subplot(2, 2, 2)
-#         pcolor(x_plt, y_plt, N')#, edgecolors="black")
-#         colorbar()
-#         title("N")
-#         # cross-sections of ϕ and h
-#         subplot(2, 2, 3)
-#         ind = size(N,2)÷2
-#         plot(xc, h[:, ind])
-#         title(join(["h at y = ", string(round(yc[ind], digits=1))]))
-#         subplot(2, 2, 4)
-#         plot(xc, N[:, ind])
-#         title(join(["N at y = ", string(round(yc[ind], digits=1))]))
-#     end
-#     if plot_error
-#         figure()
-#         semilogy(iters, errs_ϕ, label="err_ϕ", color="darkorange")
-#         semilogy(iters, errs_h, label="err_h", color="darkblue")
-#         xlabel("# iterations")
-#         ylabel("error")
-#         legend()
-#     end
 
-# end
+ode!(du0, u0, nothing, 0.0)
+@time ode!(du0, u0, nothing, 0.0) # 1e-3s
+@inferred ode!(du0, u0, nothing, 0.0)
+## note there are a few Core.box around!
+#@code_warntype ode!(du0, u0, nothing, 0.0)
+
+prob = ODEProblem(ode!, u0, tspan)
+# Note ROCK4 is an explicit alg which is good for stiff problems
+# https://diffeq.sciml.ai/latest/solvers/ode_solve/#Stabilized-Explicit-Methods, https://epubs.siam.org/doi/pdf/10.1137/S1064827500379549
+# ROCK4 seems to be the best of the lot.
+# See also https://www.stochasticlifestyle.com/solving-systems-stochastic-pdes-using-gpus-julia/
+# Time steps fo t>day:
+# - 4s for tol=1e-8
+# - 10s for tol=1e-7 (but solution is a bit unstable)
+@time sol = solve(prob, ROCK4(), reltol=1e-8, abstol=1e-8);
+# Note that about tol 1e-8 is needed to get a stable, non-oscillatory solution
+
+
+hend = sol.u[end].x[1];
+ϕend = sol.u[end].x[2];
+display(plot(heatmap(hend),
+             heatmap(ϕend)))
+
+display(plot(plot(ϕend[:,end÷2]*scales.ϕ_, xlabel="x (gridpoints)", ylabel="ϕ (MPa)"),
+             plot(ϕend[:,end÷2], xlabel="x (gridpoints)", ylabel="ϕ ()"),
+             reuse=false))
+
+display(plot(sol.t*scales.t_/day, diff(sol.t*scales.t_), reuse=false, xlabel="t (day)", ylabel="timestep (s)"))
