@@ -22,8 +22,8 @@ plot_err = true
 
     # numerics
     nx, ny = 64, 32
-    itMax  = 100
-    nout   = 10
+    itMax  = 1e7
+    nout   = 1e4
     # derived
     dx, dy = Lx / (nx-3), Ly / (ny-3)     # the outermost points are ghost points
     xc, yc = LinRange(-dx, Lx+dx, nx), LinRange(-dy, Ly+dy, ny)
@@ -33,19 +33,21 @@ plot_err = true
     h0     = 0.04 * ones(nx, ny) # initial fields of ϕ and h
     get_H(x, y) = 6 *( sqrt((x)+5e3) - sqrt(5e3) ) + 1
     H      = [0.0; ones(nx-2); 0.0] * [0.0 ones(ny-2)' 0.0] .* get_H.(xc, yc') # ice thickness, rectangular ice sheet with ghostpoints
+    ϕ0[1:2,:] .= 0.0 # Dirichlet BC
 
     # scaling factors
     ϕ_     = 9.81 * 910 * mean(H)
+    h_     = 0.1
     x_     = max(Lx, Ly)
-    q_     = 0.005 * 0.1^α * (ϕ_ / x_)^(β-1)
-    t_     = 0.1 * x_ / q_
+    q_     = 0.005 * h_^α * (ϕ_ / x_)^(β-1)
+    t_     = h_ * x_ / q_
     Σ      = 5e-8 * x_ / q_
     Γ      = 3.375e-25 * ϕ_^3 * x_ / q_ * 2/27  # the last bit is 2/n^n from vc
     Λ      = m * x_ / q_
 
     # apply the scaling and convert to correct data type
     ϕ0     = ϕ0 ./ ϕ_
-    h0     = h0 ./ 0.1
+    h0     = h0 ./ h_
     dx     = dx / x_
     dy     = dy / x_
     dt     = dt / t_
@@ -68,7 +70,7 @@ plot_err = true
     h_old = copy(h0); h = copy(h0)
 
     # Time loop
-    iter = 0
+    iter = 0; dtp= dt * 0.1
     while iter<itMax
 
         # d_eff
@@ -91,20 +93,29 @@ plot_err = true
                   .- inn(dhdt)
                   .+ Λ
 
+        # timestep
+        dtnum = e_v .* min(dx,dy)^2 ./ maximum(d_eff) ./ 4.1
+        if iter>2e4 dtp   = 1e1*dtnum end
+
         # updates
-        ϕ[2:end-1,2:end-1] .= inn(ϕ_old) * dt./ e_v .* dϕdt
-        h      .= h_old .+ dt .* dhdt
+        ϕ[2:end-1,2:end-1] .= inn(ϕ_old) .+ dtp ./ e_v .* dϕdt
+        h                  .=     h_old  .+ dtp        .* dhdt
         
         # dirichlet boundary conditions to pw = 0
         ϕ[1:2,:] .= 0.0
 
-        iter += 1
+        # update old
+        ϕ_old .= ϕ
+        h_old .= h
 
+        iter += 1
         # check convergence criterion
         if iter % nout == 0
             # visu
-            display(heatmap(h'))
-            @printf("it %d, max(h) = %1.3f \n", iter, maximum(h))
+            p1 = heatmap(inn(ϕ)')
+            p2 = heatmap(inn(h)')
+            display(plot(p1, p2))
+            @printf("it %d (dtp = %1.3e, dt = %1.3e, dtnum = %1.3e), max(h) = %1.3f \n", iter, dtp, dt, dtnum, maximum(h))
         end
     end
     return
