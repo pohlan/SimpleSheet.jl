@@ -7,24 +7,26 @@ using Printf, LinearAlgebra, Statistics, Plots
 @views av_yi(A) = (0.5  .* (A[2:end-1,1:end-1] .+ A[2:end-1,2:end]))
 @views    av(A) = (0.25 .* (A[1:end-1,1:end-1] .+ A[1:end-1,2:end] .+ A[2:end,2:end] .+ A[2:end,1:end-1]))
 
-const small    = eps(Float64)
-plot_out = true
-plot_err = true
+const small = eps(Float64)
+const day   = 24*3600
+plot_out    = true
+plot_err    = true
 
 @views function simple_sheet()
     # physics
     Lx, Ly = 100e3, 20e3                  # length/width of the domain, starts at (0, 0)
-    dt     = 1e0                          # physical time step
+    dt     = 10.0                          # physical time step
+    ttot   = 0.5day
     α      = 1.25
     β      = 1.5
     m      = 7.93e-11                           # source term for SHMIP A1 test case
-    e_v    = 1e-3                               # void ratio for englacial storage
+    e_v    = 1.0#1e-3                               # void ratio for englacial storage
 
     # numerics
     nx, ny = 64, 32
-    itMax  = 1e7
     nout   = 1e4
     # derived
+    nt     = Int(ttot ÷ dt)
     dx, dy = Lx / (nx-3), Ly / (ny-3)     # the outermost points are ghost points
     xc, yc = LinRange(-dx, Lx+dx, nx), LinRange(-dy, Ly+dy, ny)
 
@@ -64,14 +66,16 @@ plot_err = true
     vc     = zeros(nx  ,ny  )
     dϕdt   = zeros(nx-2,ny-2)
     dhdt   = zeros(nx  ,ny  )
+    dϕdt_old = zeros(nx-2,ny-2)
+    dhdt_old = zeros(nx  ,ny  )
 
     # initialise all ϕ and h fields
-    ϕ_old = copy(ϕ0); ϕ = copy(ϕ0)
-    h_old = copy(h0); h = copy(h0)
+    ϕ = copy(ϕ0)
+    h = copy(h0)
 
     # Time loop
-    iter = 0; dtp= dt * 0.1
-    while iter<itMax
+    println("Running nt = $nt time steps (dt = $(dt*t_) sec.)")
+    for it = 1:nt
 
         # d_eff
         dϕ_dx  .= diff(ϕ,dims=1) ./ dx
@@ -89,73 +93,32 @@ plot_err = true
         vo     .= (h .< 1.0) .* (1.0 .- h)
         vc     .=  h .* (0.91 .* H .- ϕ).^3
         dhdt   .= (Σ .* vo .- Γ .* vc)
-        dϕdt   .= .- (diff(flux_x[:,2:end-1],dims=1) ./ dx .+ diff(flux_y[2:end-1,:],dims=2) ./ dy)
-                  .- inn(dhdt)
-                  .+ Λ
+        dϕdt   .= .- (diff(flux_x[:,2:end-1],dims=1) ./ dx .+ diff(flux_y[2:end-1,:],dims=2) ./ dy) .- inn(dhdt) .+ Λ
 
         # timestep
-        dtnum = e_v .* min(dx,dy)^2 ./ maximum(d_eff) ./ 4.1
-        if iter>2e4 dtp   = 1e1*dtnum end
+        # dtnum = e_v .* min(dx,dy)^2 ./ maximum(d_eff) ./ 4.1
 
         # updates
-        ϕ[2:end-1,2:end-1] .= inn(ϕ_old) .+ dtp ./ e_v .* dϕdt
-        h                  .=     h_old  .+ dtp        .* dhdt
+        ϕ[2:end-1,2:end-1] .=  inn(ϕ) .+ dt ./ e_v .* (0.5 .* dϕdt .+ 0.5 .* dϕdt_old)
+        h                  .= max.(h  .+ dt        .* (0.5 .* dhdt .+ 0.5 .* dhdt_old), 0.0)
 
         # dirichlet boundary conditions to pw = 0
         ϕ[1:2,:] .= 0.0
 
         # update old
-        ϕ_old .= ϕ
-        h_old .= h
+        dϕdt_old .= dϕdt
+        dhdt_old .= dhdt
 
-        iter += 1
         # check convergence criterion
-        if iter % nout == 0
+        if it % nout == 0
             # visu
             p1 = heatmap(inn(ϕ)')
             p2 = heatmap(inn(h)')
             display(plot(p1, p2))
-            @printf("it %d (dtp = %1.3e, dt = %1.3e, dtnum = %1.3e), max(h) = %1.3f \n", iter, dtp, dt, dtnum, maximum(h))
+            @printf("it %d (dt = %1.3e), max(h) = %1.3f \n", it, dt, maximum(h))
         end
     end
     return
 end
 
 simple_sheet()
-
-#     pygui(true)
-#     if plot_output
-#         x_plt = [xc[1]; xc .+ (xc[2]-xc[1])]
-#         y_plt = [yc[1]; yc .+ (yc[2]-yc[1])]
-#         N = 0.91 * H .- ϕ
-#         N[H .== 0.0] .= NaN
-#         h[H .== 0.0] .= NaN
-
-#         figure()
-#         subplot(2, 2, 1)
-#         pcolor(x_plt, y_plt, h')#, edgecolors="black")
-#         colorbar()
-#         title("h")
-#         subplot(2, 2, 2)
-#         pcolor(x_plt, y_plt, N')#, edgecolors="black")
-#         colorbar()
-#         title("N")
-#         # cross-sections of ϕ and h
-#         subplot(2, 2, 3)
-#         ind = size(N,2)÷2
-#         plot(xc, h[:, ind])
-#         title(join(["h at y = ", string(round(yc[ind], digits=1))]))
-#         subplot(2, 2, 4)
-#         plot(xc, N[:, ind])
-#         title(join(["N at y = ", string(round(yc[ind], digits=1))]))
-#     end
-#     if plot_error
-#         figure()
-#         semilogy(iters, errs_ϕ, label="err_ϕ", color="darkorange")
-#         semilogy(iters, errs_h, label="err_h", color="darkblue")
-#         xlabel("# iterations")
-#         ylabel("error")
-#         legend()
-#     end
-
-# end
