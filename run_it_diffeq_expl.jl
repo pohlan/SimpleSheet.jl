@@ -8,7 +8,7 @@
 
 using Printf, LinearAlgebra, Statistics, Plots, Test, RecursiveArrayTools, OrdinaryDiffEq,
     Infiltrator
-pyplot()
+# pyplot()
 
 @views   inn(A) = A[2:end-1,2:end-1]
 @views av_xa(A) = (0.5  .* (A[1:end-1,:] .+ A[2:end,:]))
@@ -103,9 +103,7 @@ function make_ode()
         vo     .= (h .< 1.0) .* (1.0 .- h)
         vc     .=  h .* (0.91 .* H .- ϕ).^3
         dhdt   .= (Σ .* vo .- Γ .* vc)
-        dϕdt   .= .- (diff(flux_x[:,2:end-1],dims=1) ./ dx .+ diff(flux_y[2:end-1,:],dims=2) ./ dy)
-                  .- inn(dhdt)
-                  .+ Λ
+        dϕdt   .= .- (diff(flux_x[:,2:end-1],dims=1) ./ dx .+ diff(flux_y[2:end-1,:],dims=2) ./ dy) .- inn(dhdt) .+ Λ
 
         return nothing
     end
@@ -143,8 +141,8 @@ hend = sol.u[end].x[1];
 display(plot(heatmap(hend),
              heatmap(ϕend)))
 
-display(plot(plot(ϕend[:,end÷2]*scales.ϕ_, xlabel="x (gridpoints)", ylabel="ϕ (MPa)"),
-             plot(ϕend[:,end÷2], xlabel="x (gridpoints)", ylabel="ϕ ()"),
-             reuse=false))
+# display(plot(plot(ϕend[:,end÷2]*scales.ϕ_, xlabel="x (gridpoints)", ylabel="ϕ (MPa)"),
+#              plot(ϕend[:,end÷2], xlabel="x (gridpoints)", ylabel="ϕ ()"),
+#              reuse=false))
 
-display(plot(sol.t*scales.t_/day, diff(sol.t*scales.t_), reuse=false, xlabel="t (day)", ylabel="timestep (s)"))
+# display(plot(sol.t*scales.t_/day, diff(sol.t*scales.t_), reuse=false, xlabel="t (day)", ylabel="timestep (s)"))
