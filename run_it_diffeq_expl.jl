@@ -75,7 +75,8 @@ function make_ode()
     ϕ_old = copy(ϕ0)
     h_old = copy(h0)
 
-    ode! = @views function (du,u,p,t)
+    ode! = let H=H,dx=dx,dy=dy
+        @views function (du,u,p,t)
         h, ϕ = u.x
         ## to avoid errors from Complex numbers:
         h .= max.(h,0)
@@ -107,6 +108,7 @@ function make_ode()
         dϕdt   .= (.- (diff(flux_x[:,2:end-1],dims=1) ./ dx .+ diff(flux_y[2:end-1,:],dims=2) ./ dy) .- inn(dhdt) .+ Λ) ./ e_v
 
         return nothing
+        end
     end
     return ode!, ϕ0, h0, (;ϕ_, h_, x_, q_, t_, H_, Σ, Γ, Λ), H
 end
