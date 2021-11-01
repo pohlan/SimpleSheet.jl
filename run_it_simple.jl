@@ -9,22 +9,21 @@ using Printf, LinearAlgebra, Statistics, Plots
 
 const small = eps(Float64)
 const day   = 24*3600
-plot_out    = true
-plot_err    = true
 
-@views function simple_sheet()
+@views function simple_sheet(; do_monit=true)
     # physics
     Lx, Ly = 100e3, 20e3                  # length/width of the domain, starts at (0, 0)
-    dt     = 10.0                          # physical time step
+    dt     = 1.0                          # physical time step
     ttot   = 0.5day
     α      = 1.25
     β      = 1.5
     m      = 7.93e-11                           # source term for SHMIP A1 test case
-    e_v    = 1.0#1e-3                               # void ratio for englacial storage
+    e_v    = 1e-3                               # void ratio for englacial storage
 
     # numerics
     nx, ny = 64, 32
     nout   = 1e4
+    CN     = 0.5 # Crank-Nicolson (CN=0.5), Forward Euler (CN=0)
     # derived
     nt     = Int(ttot ÷ dt)
     dx, dy = Lx / (nx-3), Ly / (ny-3)     # the outermost points are ghost points
@@ -38,6 +37,7 @@ plot_err    = true
     ϕ0[1:2,:] .= 0.0 # Dirichlet BC
 
     # scaling factors
+    H_     = 1000.0
     ϕ_     = 9.81 * 910 * mean(H)
     h_     = 0.1
     x_     = max(Lx, Ly)
@@ -53,7 +53,7 @@ plot_err    = true
     dx     = dx / x_
     dy     = dy / x_
     dt     = dt / t_
-    H      = H ./ mean(H)
+    H      = H ./ H_
 
     # array allocation
     dϕ_dx  = zeros(nx-1,ny  )
@@ -75,7 +75,12 @@ plot_err    = true
 
     # Time loop
     println("Running nt = $nt time steps (dt = $(dt*t_) sec.)")
-    for it = 1:nt
+    t_sol=@elapsed for it = 1:nt
+
+        h .= max.(h, 0.0)
+
+        # dirichlet boundary conditions to pw = 0
+        ϕ[1:2,:] .= 0.0
 
         # d_eff
         dϕ_dx  .= diff(ϕ,dims=1) ./ dx
@@ -93,32 +98,38 @@ plot_err    = true
         vo     .= (h .< 1.0) .* (1.0 .- h)
         vc     .=  h .* (0.91 .* H .- ϕ).^3
         dhdt   .= (Σ .* vo .- Γ .* vc)
-        dϕdt   .= .- (diff(flux_x[:,2:end-1],dims=1) ./ dx .+ diff(flux_y[2:end-1,:],dims=2) ./ dy) .- inn(dhdt) .+ Λ
+        dϕdt   .= (1.0 ./ e_v) .* (.- (diff(flux_x[:,2:end-1],dims=1) ./ dx .+ diff(flux_y[2:end-1,:],dims=2) ./ dy) .- inn(dhdt) .+ Λ)
 
         # timestep
         # dtnum = e_v .* min(dx,dy)^2 ./ maximum(d_eff) ./ 4.1
 
         # updates
-        ϕ[2:end-1,2:end-1] .=  inn(ϕ) .+ dt ./ e_v .* (0.5 .* dϕdt .+ 0.5 .* dϕdt_old)
-        h                  .= max.(h  .+ dt        .* (0.5 .* dhdt .+ 0.5 .* dhdt_old), 0.0)
+        h                  .=     h  .+ dt .* ((1-CN) .* dhdt .+ CN .* dhdt_old)
+        ϕ[2:end-1,2:end-1] .= inn(ϕ) .+ dt .* ((1-CN) .* dϕdt .+ CN .* dϕdt_old)
 
-        # dirichlet boundary conditions to pw = 0
-        ϕ[1:2,:] .= 0.0
-
-        # update old
+        # update old (Crank Nicolson)
         dϕdt_old .= dϕdt
         dhdt_old .= dhdt
 
         # check convergence criterion
-        if it % nout == 0
+        if (it % nout == 0) && do_monit
             # visu
             p1 = heatmap(inn(ϕ)')
             p2 = heatmap(inn(h)')
             display(plot(p1, p2))
-            @printf("it %d (dt = %1.3e), max(h) = %1.3f \n", it, dt, maximum(h))
+            @printf("it %d (dt = %1.3e), max(h) = %1.3f \n", it, dt, maximum(inn(h)))
         end
     end
-    return
+    return h, ϕ, t_sol
 end
 
-simple_sheet()
+do_monit = false
+h, ϕ, t_sol = simple_sheet(; do_monit=do_monit)
+@show t_sol
+
+if !do_monit
+    # visu
+    p1 = heatmap(inn(ϕ)')
+    p2 = heatmap(inn(h)')
+    display(plot(p1, p2))
+end

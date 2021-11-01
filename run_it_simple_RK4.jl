@@ -9,8 +9,6 @@ using Printf, LinearAlgebra, Statistics, Plots
 
 const small = eps(Float64)
 const day   = 24*3600
-plot_out    = true
-plot_err    = true
 
 @views function compute_resid(Ki_h, Ki_ϕ, h, ϕ, dϕ_dx, dϕ_dy, gradϕ, d_eff, flux_x, flux_y, vo, vc, α, small, β, H, Σ, Γ, Λ, e_v, dx, dy)
 
@@ -52,7 +50,7 @@ end
     return
 end
 
-@views function simple_sheet()
+@views function simple_sheet(; do_monit=true)
     # physics
     Lx, Ly = 100e3, 20e3                  # length/width of the domain, starts at (0, 0)
     dt     = 1.0                          # physical time step
@@ -78,6 +76,7 @@ end
     ϕ0[1:2,:] .= 0.0 # Dirichlet BC
 
     # scaling factors
+    H_     = 1000.0
     ϕ_     = 9.81 * 910 * mean(H)
     h_     = 0.1
     x_     = max(Lx, Ly)
@@ -93,7 +92,7 @@ end
     dx     = dx / x_
     dy     = dy / x_
     dt     = dt / t_
-    H      = H ./ mean(H)
+    H      = H ./ H_
 
     # array allocation
     dϕ_dx  = zeros(nx-1,ny  )
@@ -121,7 +120,7 @@ end
 
     # Time loop
     println("Running nt = $nt time steps (dt = $(dt*t_) sec.)")
-    for it = 1:nt
+    t_sol=@elapsed for it = 1:nt
 
         # timestep
         # dt = min(dx,dy)^2 ./ maximum(d_eff) ./ 4.1
@@ -139,7 +138,7 @@ end
         update_RK4!(h, ϕ, K1_h, K1_ϕ, K2_h, K2_ϕ, K3_h, K3_ϕ, K4_h, K4_ϕ, dt)
 
         # check convergence criterion
-        if it % nout == 0
+        if (it % nout == 0) && do_monit
             # @show dtp = min(dx,dy)^2 ./ maximum(d_eff) ./ 4.1
             # visu
             p1 = heatmap(inn(ϕ)')
@@ -148,7 +147,16 @@ end
             @printf("it %d (dt = %1.3e), max(h) = %1.3f \n", it, dt, maximum(inn(h)))
         end
     end
-    return h, ϕ
+    return h, ϕ, t_sol
 end
 
-@time h, ϕ =simple_sheet()
+do_monit = false
+h, ϕ, t_sol = simple_sheet(; do_monit=do_monit)
+@show t_sol
+
+if !do_monit
+    # visu
+    p1 = heatmap(inn(ϕ)')
+    p2 = heatmap(inn(h)')
+    display(plot(p1, p2))
+end
