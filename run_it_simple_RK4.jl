@@ -13,7 +13,7 @@ plot_out    = true
 plot_err    = true
 
 @views function compute_resid(Ki_h, Ki_ϕ, h, ϕ, dϕ_dx, dϕ_dy, gradϕ, d_eff, flux_x, flux_y, vo, vc, α, small, β, H, Σ, Γ, Λ, e_v, dx, dy)
-    
+
     h .= max.(h, 0.0)
 
     # dirichlet boundary conditions to pw = 0
@@ -55,12 +55,12 @@ end
 @views function simple_sheet()
     # physics
     Lx, Ly = 100e3, 20e3                  # length/width of the domain, starts at (0, 0)
-    dt     = 10.0                          # physical time step
+    dt     = 1.0                          # physical time step
     ttot   = 0.5day
     α      = 1.25
     β      = 1.5
     m      = 7.93e-11                           # source term for SHMIP A1 test case
-    e_v    = 1.0#1e-3                               # void ratio for englacial storage
+    e_v    = 1e-3                               # void ratio for englacial storage
 
     # numerics
     nx, ny = 64, 32
@@ -145,10 +145,10 @@ end
             p1 = heatmap(inn(ϕ)')
             p2 = heatmap(inn(h)')
             display(plot(p1, p2))
-            @printf("it %d (dt = %1.3e), max(h) = %1.3f \n", it, dt, maximum(h))
+            @printf("it %d (dt = %1.3e), max(h) = %1.3f \n", it, dt, maximum(inn(h)))
         end
     end
-    return
+    return h, ϕ
 end
 
-simple_sheet()
+@time h, ϕ =simple_sheet()

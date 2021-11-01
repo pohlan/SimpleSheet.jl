@@ -44,7 +44,8 @@ function make_ode()
     ϕ0[1:2,:] .= 0.0 # Dirichlet BC
 
     # scaling factors
-    ϕ_     = 9.81 * 910 * mean(H)
+    H_     = 1000.0
+    ϕ_     = 9.81 * 910 * H_
     h_     = 0.1
     x_     = max(Lx, Ly)
     q_     = 0.005 * h_^α * (ϕ_ / x_)^(β-1)
@@ -59,7 +60,7 @@ function make_ode()
     dx     = dx / x_
     dy     = dy / x_
     dt     = dt / t_
-    H      = H ./ mean(H)
+    H      = H ./ H_
 
     # array allocationsize(Λ)
     dϕ_dx  = zeros(nx-1,ny  )
@@ -71,7 +72,7 @@ function make_ode()
     vo     = zeros(nx  ,ny  )
     vc     = zeros(nx  ,ny  )
 
-    # initialise all ϕ and h fields
+    # initialize all ϕ and h fields
     ϕ_old = copy(ϕ0)
     h_old = copy(h0)
 
@@ -102,17 +103,18 @@ function make_ode()
         flux_y .= .- d_eff[:,2:end] .* max.(dϕ_dy, 0.0) .- d_eff[:,1:end-1] .* min.(dϕ_dy, 0.0)
         vo     .= (h .< 1.0) .* (1.0 .- h)
         vc     .=  h .* (0.91 .* H .- ϕ).^3
+
         dhdt   .= (Σ .* vo .- Γ .* vc)
-        dϕdt   .= .- (diff(flux_x[:,2:end-1],dims=1) ./ dx .+ diff(flux_y[2:end-1,:],dims=2) ./ dy) .- inn(dhdt) .+ Λ
+        dϕdt   .= (.- (diff(flux_x[:,2:end-1],dims=1) ./ dx .+ diff(flux_y[2:end-1,:],dims=2) ./ dy) .- inn(dhdt) .+ Λ) ./ e_v
 
         return nothing
     end
-    return ode!, ϕ0, h0, (;ϕ_, h_, x_, q_, t_, Σ, Γ, Λ)
+    return ode!, ϕ0, h0, (;ϕ_, h_, x_, q_, t_, H_, Σ, Γ, Λ), H
 end
 
-ode!, ϕ0, h0, scales = make_ode()
+ode!, ϕ0, h0, scales, H = make_ode()
 
-day = 24*3600
+const day = 24*3600
 tspan = (0, 0.5day / scales.t_)
 u0 = ArrayPartition(h0, ϕ0)
 du0 = ArrayPartition(copy(h0), copy(ϕ0))
@@ -132,17 +134,19 @@ prob = ODEProblem(ode!, u0, tspan)
 # Time steps fo t>day:
 # - 4s for tol=1e-8
 # - 10s for tol=1e-7 (but solution is a bit unstable)
-@time sol = solve(prob, ROCK4(), reltol=1e-8, abstol=1e-8);
+@time sol = solve(prob, ROCK4(), reltol=1e-8, abstol=1e-8) #, save_on=false) #, isoutofdomain=(u,p,t) -> any(u.x[1]<0));
 # Note that about tol 1e-8 is needed to get a stable, non-oscillatory solution
 
 
-hend = sol.u[end].x[1];
-ϕend = sol.u[end].x[2];
-display(plot(heatmap(hend),
-             heatmap(ϕend)))
+hend = sol.u[end].x[1]*scales.h_;
+ϕend = sol.u[end].x[2]*scales.ϕ_;
+N = 910*9.81*H*scales.H_ - ϕend;
 
-# display(plot(plot(ϕend[:,end÷2]*scales.ϕ_, xlabel="x (gridpoints)", ylabel="ϕ (MPa)"),
-#              plot(ϕend[:,end÷2], xlabel="x (gridpoints)", ylabel="ϕ ()"),
-#              reuse=false))
+display(plot(heatmap(hend[2:end-1,2:end-1]),
+             heatmap(ϕend[2:end-1,2:end-1])))
 
-# display(plot(sol.t*scales.t_/day, diff(sol.t*scales.t_), reuse=false, xlabel="t (day)", ylabel="timestep (s)"))
+display(plot(plot(ϕend[2:end-1,end÷2]/1e6, xlabel="x (gridpoints)", ylabel="ϕ (MPa)"),
+             plot(ϕend[2:end-1,end÷2]/scales.ϕ_, xlabel="x (gridpoints)", ylabel="ϕ ()"),
+             reuse=false))
+
+display(plot(sol.t*scales.t_/day, diff(sol.t*scales.t_), reuse=false, xlabel="t (day)", ylabel="timestep (s)"))#, yscale=:log10))
