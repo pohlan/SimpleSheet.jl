@@ -30,8 +30,7 @@ function make_ode()
 
     # numerics
     nx, ny = 64, 32
-    itMax  = 1e7
-    nout   = 1e4
+
     # derived
     dx, dy = Lx / (nx-3), Ly / (ny-3)     # the outermost points are ghost points
     xc, yc = LinRange(-dx, Lx+dx, nx), LinRange(-dy, Ly+dy, ny)
