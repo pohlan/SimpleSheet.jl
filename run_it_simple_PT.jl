@@ -39,7 +39,7 @@ const day   = 24*3600
 
     # scaling factors
     H_     = 1000.0
-    ϕ_     = 9.81 * 910 * mean(H)
+    ϕ_     = 9.81 * 910 * H_
     h_     = 0.1
     x_     = max(Lx, Ly)
     q_     = 0.005 * h_^α * (ϕ_ / x_)^(β-1)
@@ -107,8 +107,8 @@ const day   = 24*3600
         div_q  .= diff(flux_x[:,2:end-1],dims=1) ./ dx .+ diff(flux_y[2:end-1,:],dims=2) ./ dy
 
         # residuals
-        Res_h  .= - (inn(h) .- inn(h0)) ./ dt  .+ Σ .* inn(vo) .- Γ .* inn(vc)
-        #Res_h  .= - (inn(h) .- inn(h0)) ./ dt  .- div_q .+ Λ
+        #Res_h  .= - (inn(h) .- inn(h0)) ./ dt  .+ Σ .* inn(vo) .- Γ .* inn(vc)
+        Res_h  .= - (inn(h) .- inn(h0)) ./ dt  .- div_q .+ Λ
         Res_ϕ  .= - e_v .* (inn(ϕ) .- inn(ϕ0)) ./ dt .- div_q .- (Σ .* inn(vo) .- Γ .* inn(vc)) .+ Λ
 
         # rate of change
