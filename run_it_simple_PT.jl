@@ -84,9 +84,6 @@ const day   = 24*3600
     for it = 1:itMax
         h .= max.(h, 0.0)
 
-        # dirichlet boundary conditions to pw = 0
-        ϕ[1:2,:] .= 0.0
-
         # d_eff
         dϕ_dx  .= diff(ϕ,dims=1) ./ dx
         dϕ_dy  .= diff(ϕ,dims=2) ./ dy
@@ -100,10 +97,10 @@ const day   = 24*3600
         # fluxes and size evolution terms
         flux_x .= .- d_eff[2:end,:] .* max.(dϕ_dx, 0.0) .- d_eff[1:end-1,:] .* min.(dϕ_dx, 0.0)
         flux_y .= .- d_eff[:,2:end] .* max.(dϕ_dy, 0.0) .- d_eff[:,1:end-1] .* min.(dϕ_dy, 0.0)
-        ux     .= av_xi(flux_x) ./ inn(h)
-        uy     .= av_yi(flux_y) ./ inn(h)
+        ux     .= av_xi(flux_x) ./ (inn(h) .+ small)  # dividing by zero gives NaN
+        uy     .= av_yi(flux_y) ./ (inn(h) .+ small)
         vo     .= (h .< 1.0) .* (1.0 .- h)
-        vc     .=  h .* (0.91 .* H .- ϕ).^3
+        vc     .= h .* (0.91 .* H .- ϕ).^3            # for ϕ = +/-Inf this gives NaN even if h=0
         div_q  .= diff(flux_x[:,2:end-1],dims=1) ./ dx .+ diff(flux_y[2:end-1,:],dims=2) ./ dy
 
         # residuals
@@ -115,9 +112,13 @@ const day   = 24*3600
         dhdτ   .= Res_h .+ γ_h .* dhdτ
         dϕdτ   .= Res_ϕ .+ γ_ϕ .* dϕdτ
 
-        # pseudo-timestep
+        # pseudo-timestep as calculated so far:
         dτ_ϕ   .= min(dx, dy)^2 ./ inn(d_eff) ./ 4.1
         dτ_h   .= 1e-5 # min(dx, dy)   ./ max.(abs.(ux), abs.(uy)) ./ 4.1
+
+        # exactly as it is in Büeler & van Pelt (just slightly different)
+        #dτ_ϕ   .= 0.5 .* e_v ./ inn(d_eff) .* (1/dx^2 + 1/dy^2 + small)^(-1)
+        #dτ_h   .= 0.5 .* min.((abs.(ux)./dx .+ abs.(uy)./dy .+ small).^(-1), dt)
 
         # updates
         h[2:end-1,2:end-1] .= inn(h)  .+ dτ_h .* dhdτ
