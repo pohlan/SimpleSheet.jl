@@ -38,7 +38,7 @@ const day   = 24*3600
 
     # scaling factors
     H_     = 1000.0
-    ϕ_     = 9.81 * 910 * mean(H)
+    ϕ_     = 9.81 * 910 * H_
     h_     = 0.1
     x_     = max(Lx, Ly)
     q_     = 0.005 * h_^α * (ϕ_ / x_)^(β-1)
