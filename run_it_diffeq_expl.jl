@@ -110,7 +110,7 @@ function make_ode()
         return nothing
         end
     end
-    return ode!, ϕ0, h0, (;ϕ_, h_, x_, q_, t_, H_, Σ, Γ, Λ), H
+    return ode!, copy(ϕ0), copy(h0), (;ϕ_, h_, x_, q_, t_, H_, Σ, Γ, Λ), H
 end
 
 ode!, ϕ0, h0, scales, H = make_ode()
@@ -148,6 +148,8 @@ display(plot(heatmap(hend[2:end-1,2:end-1]),
 
 display(plot(plot(ϕend[2:end-1,end÷2]/1e6, xlabel="x (gridpoints)", ylabel="ϕ (MPa)"),
              plot(ϕend[2:end-1,end÷2]/scales.ϕ_, xlabel="x (gridpoints)", ylabel="ϕ ()"),
-             reuse=false))
+             plot(hend[2:end-1,end÷2], xlabel="x (gridpoints)", ylabel="h (m)"),
+             plot(hend[2:end-1,end÷2]/scales.h_, xlabel="x (gridpoints)", ylabel="h ()"),
+             layout=(2,2), reuse=false))
 
 display(plot(sol.t*scales.t_/day, diff(sol.t*scales.t_), reuse=false, xlabel="t (day)", ylabel="timestep (s)"))#, yscale=:log10))
