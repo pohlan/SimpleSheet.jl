@@ -22,7 +22,7 @@ const day   = 24*3600
 
     # numerics
     nx, ny = 64, 32
-    nout   = 1
+    nout   = 100
     CN     = 0.5   # Crank-Nicolson (CN=0.5), Forward Euler (CN=0)
     # derived
     nt     = Int(ttot ÷ dt)
@@ -95,7 +95,7 @@ const day   = 24*3600
 
     # Time loop
     println("Running nt = $nt time steps (dt = $(dt*t_) sec.)")
-    t_sol=@elapsed for it = 1:nt
+    t_sol=@elapsed for it = 1:10^4
 
         # d_eff
         dϕ_dx  .= diff(ϕ,dims=1) ./ dx
@@ -121,8 +121,8 @@ const day   = 24*3600
         dϕdt[inn(H) .== 0.] .= 0.
 
         # timestep
-        # dtnum = e_v .* min(dx,dy)^2 ./ maximum(d_eff) ./ 4.1
-        dtnum = min(min(dx, dy)^2 / maximum(d_eff .+ small) ./ 4.1, dt)
+        dtnum = e_v * min(dx, dy)^2 / maximum(d_eff .+ small) ./ 4.1
+
         # updates
         h      .=     h  .+ dtnum .* ((1-CN) .* dhdt .+ CN .* dhdt_old)
         inn(ϕ) .= inn(ϕ) .+ dtnum .* ((1-CN) .* dϕdt .+ CN .* dϕdt_old)
