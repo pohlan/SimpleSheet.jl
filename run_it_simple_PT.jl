@@ -115,7 +115,7 @@ const day   = 24*3600
         dϕdt[1, :] .= 0.   # no update at ϕ Dirichlet B.C. points, important since dϕdt is used to update dhdt and no Dirichlet B.C. are imposed on h
         if use_masscons_for_h
             # eq. as in B&P but additionally with storage term
-            # should be equivalent to the version below (in practice not quite if e_v_num > 0)
+            # should be equivalent to the version below (in practice not quite)
             dhdt .= .- dϕdt .* e_v .- div_q .+ Λ
         else
             # ODE, eq. as used in GlaDS but with regularisation e_v_num
