@@ -19,13 +19,14 @@ pyplot()
 
 const small    = eps(Float64)
 
-function make_ode(;use_masscons_for_h = false)
+function make_ode_reg(; use_masscons_for_h=false)
     # physics
     Lx, Ly = 100e3, 20e3                  # length/width of the domain, starts at (0, 0)
     α      = 1.25
     β      = 1.5
     m      = 7.93e-11                           # source term for SHMIP A1 test case
     e_v    = 1e-3                               # void ratio for englacial storage
+    e_v_num= 1e-2                               # regularization void ratio
 
     # numerics
     nx, ny = 64, 32
@@ -37,6 +38,7 @@ function make_ode(;use_masscons_for_h = false)
     # initial conditions
     ϕ0     = 100. * ones(nx, ny)
     h0     = 0.04 * ones(nx, ny) # initial fields of ϕ and h
+    h0[1,:] .=0;     h0[end,:] .=0; h0[:,1] .=0; h0[:,end] .=0;
     get_H(x, y) = 6 *( sqrt((x)+5e3) - sqrt(5e3) ) + 1
     H      = [0.0; ones(nx-2); 0.0] * [0.0 ones(ny-2)' 0.0] .* get_H.(xc, yc') # ice thickness, rectangular ice sheet with ghostpoints
     ϕ0[1:2,:] .= 0.0 # Dirichlet BC
@@ -76,51 +78,58 @@ function make_ode(;use_masscons_for_h = false)
 
     ode! = let H=H,dx=dx,dy=dy
         @views function (du,u,p,t)
-        h, ϕ = u.x
-        ## to avoid errors from Complex numbers:
-        h .= max.(h,0)
-        # alternative:
-        #h .= abs.(h)
+            h, ϕ = u.x
+            ## to avoid errors from Complex numbers:
+            h .= max.(h,0)
+            # alternative:
+            #h .= abs.(h)
 
-        # dirichlet boundary conditions to pw = 0
-        ϕ[1:2,:] .= 0.0
+            # dirichlet boundary conditions to pw = 0
+            ϕ[1:2,:] .= 0.0
 
-        dhdt = du.x[1]
-        dϕdt = inn(du.x[2])
-        # d_eff
-        dϕ_dx  .= diff(ϕ, dims=1) ./ dx
-        dϕ_dy  .= diff(ϕ, dims=2) ./ dy
+            dhdt = du.x[1]
+            dϕdt = inn(du.x[2])
+            # d_eff
+            dϕ_dx  .= diff(ϕ, dims=1) ./ dx
+            dϕ_dy  .= diff(ϕ, dims=2) ./ dy
 
-        dϕ_dx[1,:] .= 0.0; dϕ_dx[end,:] .= 0.0
-        dϕ_dy[:,1] .= 0.0; dϕ_dy[:,end] .= 0.0
+            dϕ_dx[1,:] .= 0.0; dϕ_dx[end,:] .= 0.0
+            dϕ_dy[:,1] .= 0.0; dϕ_dy[:,end] .= 0.0
 
-        gradϕ  .= sqrt.( av_xi(dϕ_dx).^2 .+ av_yi(dϕ_dy).^2 )
-        d_eff[2:end-1,2:end-1]  .= inn(h).^α .* (gradϕ .+ small).^(β-2)
+            gradϕ  .= sqrt.( av_xi(dϕ_dx).^2 .+ av_yi(dϕ_dy).^2 )
+            inn(d_eff)  .= inn(h).^α .* (gradϕ .+ small).^(β-2)
 
-        # rate if changes
-        flux_x .= .- d_eff[2:end,:] .* max.(dϕ_dx, 0.0) .- d_eff[1:end-1,:] .* min.(dϕ_dx, 0.0)
-        flux_y .= .- d_eff[:,2:end] .* max.(dϕ_dy, 0.0) .- d_eff[:,1:end-1] .* min.(dϕ_dy, 0.0)
-        vo     .= (h .< 1.0) .* (1.0 .- h)
-        vc     .=  h .* (0.91 .* H .- ϕ).^3
+            # rate of changes
+            flux_x .= .- d_eff[2:end,:] .* max.(dϕ_dx, 0.0) .- d_eff[1:end-1,:] .* min.(dϕ_dx, 0.0)
+            flux_y .= .- d_eff[:,2:end] .* max.(dϕ_dy, 0.0) .- d_eff[:,1:end-1] .* min.(dϕ_dy, 0.0)
+            vo     .= (h .< 1.0) .* (1.0 .- h)
+            vc     .=  h .* (0.91 .* H .- ϕ).^3
 
-        dhdt   .= (Σ .* vo .- Γ .* vc)
-        div_q  .= (diff(flux_x[:,2:end-1],dims=1) ./ dx .+ diff(flux_y[2:end-1,:],dims=2) ./ dy)
-        dϕdt   .= (.- div_q .- inn(dhdt) .+ Λ) ./ e_v
-        if use_masscons_for_h
-            # note this is 100% identical (modulus floating point errors) to use_masscons_for_h==false...
-            inn(dhdt) .= .-e_v.*dϕdt .- div_q .+ Λ
-        end
+            dhdt   .= (Σ .* vo .- Γ .* vc)
+            div_q  .= (diff(flux_x[:,2:end-1],dims=1) ./ dx .+ diff(flux_y[2:end-1,:],dims=2) ./ dy)
+            dϕdt   .= (.- div_q .- inn(dhdt) .+ Λ) ./ (e_v .+ e_v_num)
+            ## This fixes the issue reported in:
+            ## https://github.com/pohlan/SimpleSheet.jl/pull/4#issue-1041245216
+            dϕdt[1,:] .= 0 # BCs
+            # update taking only non-regularization e_v into account
+            if use_masscons_for_h
+                # NOTE: above two are identical (modulus floating point errors)
+                inn(dhdt) .= .-e_v.*dϕdt .- div_q .+ Λ
+            else
+                # dhdt[3:end-1,2:end-1] .= dhdt[3:end-1,2:end-1] .+ e_v_num.*dϕdt[2:end,:]
+                inn(dhdt) .= inn(dhdt) .+ e_v_num.*dϕdt
+            end
 
-        return nothing
+            return nothing
         end
     end
     return ode!, copy(ϕ0), copy(h0), (;ϕ_, h_, x_, q_, t_, H_, Σ, Γ, Λ), H
 end
 
-ode!, ϕ0, h0, scales, H = make_ode(use_masscons_for_h=false)
+ode!, ϕ0, h0, scales, H = make_ode_reg(;use_masscons_for_h=false)
 
 const day = 24*3600
-tspan = (0, 0.5day / scales.t_)
+tspan = (0, 0.1day / scales.t_)
 u0 = ArrayPartition(h0, ϕ0)
 du0 = ArrayPartition(copy(h0), copy(ϕ0))
 
@@ -138,16 +147,15 @@ prob = ODEProblem(ode!, u0, tspan);
 # Time steps fo t>day:
 # - 4s for tol=1e-8
 # - 10s for tol=1e-7 (but solution is a bit unstable)
-@time sol = solve(prob, ROCK4(), reltol=1e-8, abstol=1e-8) #, dtmax=20/scales.t_) #, save_on=false) #, isoutofdomain=(u,p,t) -> any(u.x[1]<0));
+@time sol = solve(prob, ROCK4(), reltol=1e-8, abstol=1e-8, isoutofdomain=(u,p,t) -> any(u.x[1].<0)); #, dtmax=150/scales.t_) #, save_on=false) #, isoutofdomain=(u,p,t) -> any(u.x[1]<0));
 # Note that about tol 1e-8 is needed to get a stable, non-oscillatory solution
-
 
 hend = sol.u[end].x[1]*scales.h_;
 ϕend = sol.u[end].x[2]*scales.ϕ_;
 N = 910*9.81*H*scales.H_ - ϕend;
 
-display(plot(heatmap(hend[2:end-1,2:end-1]),
-             heatmap(ϕend[2:end-1,2:end-1])))
+display(plot(heatmap(inn(hend')),
+             heatmap(inn(ϕend'))))
 
 display(plot(plot(ϕend[2:end-1,end÷2]/1e6, xlabel="x (gridpoints)", ylabel="ϕ (MPa)"),
              plot(ϕend[2:end-1,end÷2]/scales.ϕ_, xlabel="x (gridpoints)", ylabel="ϕ ()"),

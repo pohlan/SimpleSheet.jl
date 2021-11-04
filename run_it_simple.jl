@@ -86,6 +86,7 @@ const day   = 24*3600
         dϕ_dx  .= diff(ϕ,dims=1) ./ dx
         dϕ_dy  .= diff(ϕ,dims=2) ./ dy
 
+        # flux BC
         dϕ_dx[1,:] .= 0.0; dϕ_dx[end,:] .= 0.0
         dϕ_dy[:,1] .= 0.0; dϕ_dy[:,end] .= 0.0
 
