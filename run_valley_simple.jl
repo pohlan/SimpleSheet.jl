@@ -18,7 +18,7 @@ const day   = 24*3600
     α      = 1.25
     β      = 1.5
     m      = 1.158e-6                           # source term for SHMIP A1 test case
-    e_v    = 1e-6                               # void ratio for englacial storage
+    e_v    = 1                                  # void ratio for englacial storage
 
     # numerics
     nx, ny = 64, 32
@@ -94,7 +94,7 @@ const day   = 24*3600
     h = copy(h0)
 
     # Time loop
-    println("Running nt = $nt time steps (dt = $(dt*t_) sec.)")
+    t = 0.
     t_sol=@elapsed for it = 1:10^4
 
         # d_eff
@@ -149,7 +149,9 @@ const day   = 24*3600
             display(plot(p1, p2, p3, p4))
             @printf("it %d (dt = %1.3e), max(h) = %1.3f \n", it, dtnum, maximum(inn(h)))
         end
+        t += dtnum * t_
     end
+    @printf("The odel stepped %1.3f s forward in time.\n", t)
     return h, ϕ, t_sol
 end
 
