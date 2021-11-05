@@ -17,8 +17,7 @@ const day   = 24*3600
     α      = 1.25
     β      = 1.5
     m      = 7.93e-11                           # source term for SHMIP A1 test case
-    e_v    = 1                                  # void ratio for englacial storage
-    e_v_num= 0.                                 # regularization void ratio
+    e_v    = 0.1                                  # void ratio for englacial storage
 
     # numerics
     nx, ny = 64, 32
@@ -37,7 +36,6 @@ const day   = 24*3600
     get_H(x, y) = 6 *( sqrt((x)+5e3) - sqrt(5e3) ) + 1
     H      = [0.0; ones(nx-2); 0.0] * [0.0 ones(ny-2)' 0.0] .* get_H.(xc, yc') # ice thickness, rectangular ice sheet with ghostpoints
     ϕ0[2,:] .= 0.0 # Dirichlet BC
-    h0[2,:]  .= 1.0
 
     # scaling factors
     H_     = 1000.0
@@ -90,7 +88,6 @@ const day   = 24*3600
 
         # boundary conditions
         ϕ[2, :] .= 0.0
-        h[2, :] .= 1.0
 
         # d_eff
         dϕ_dx  .= diff(ϕ,dims=1) ./ dx
@@ -113,21 +110,20 @@ const day   = 24*3600
 
         # residuals
         dhdt   .= Σ .* inn(vo) .- Γ .* inn(vc)
-        dϕdt   .= (.- div_q .- dhdt .+ Λ) ./ (e_v .+ e_v_num)
-        #dϕdt[1, :] .= 0.   # constant ϕ at Dirichlet B.C. points, important since dϕdt is used to update dhdt and no Dirichlet B.C. are imposed on h
+        dϕdt   .= (.- div_q .- dhdt .+ Λ) ./ e_v
+
         if use_masscons_for_h
             # eq. as in B&P but additionally with storage term
             # should be equivalent to the version below (in practice not quite)
             dhdt .= .- dϕdt .* e_v .- div_q .+ Λ
-        else
-            # ODE, eq. as used in GlaDS but with regularisation e_v_num
-            dhdt .= dhdt .+ e_v_num.* dϕdt
+
+        # else ODE is used , eq. as used in GlaDS
         end
+
         Res_ϕ  .= - e_v * (inn(ϕ) .- inn(ϕ0)) ./ dt  .+ dϕdt * e_v    # without the factor e_v in both terms it produces NaNs
         Res_h  .= - (inn(h) .- inn(h0)) ./ dt .+ dhdt
 
         Res_ϕ[2, :] .= 0.      # Dirichlet B.C. points, no update
-        Res_h[2, :] .= 0.
 
         # rate of change
         dhdτ   .= Res_h .+ γ_h .* dhdτ
@@ -152,8 +148,8 @@ const day   = 24*3600
             p2 = heatmap(inn(h)')
             p3 = plot(ϕ[2:end-1, end÷2], label="ϕ")
             p4 = plot(h[2:end-1, end÷2], label="h")
-            p5 = plot(abs.(Res_ϕ[2:end-1, end÷2]), label="Res_ϕ")
-            p6 = plot(abs.(Res_h[2:end-1, end÷2]), label="Res_h")
+            p5 = plot(abs.(Res_ϕ[2:end-1, end÷2]), label="abs(Res_ϕ)")
+            p6 = plot(abs.(Res_h[2:end-1, end÷2]), label="abs(Res_h)")
             display(plot(p1, p3, p5, p2, p4, p6))
             err_h = norm(Res_h) ./ length(Res_h)
             err_ϕ = norm(Res_ϕ) ./ length(Res_ϕ)
