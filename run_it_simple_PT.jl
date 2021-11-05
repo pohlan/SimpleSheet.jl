@@ -17,7 +17,7 @@ const day   = 24*3600
     α      = 1.25
     β      = 1.5
     m      = 7.93e-11                           # source term for SHMIP A1 test case
-    e_v    = 1e-3                               # void ratio for englacial storage
+    e_v    = 1                                  # void ratio for englacial storage
     e_v_num= 0.                                 # regularization void ratio
 
     # numerics
@@ -36,7 +36,8 @@ const day   = 24*3600
     h0     = 0.04 * ones(nx, ny) # initial fields of ϕ and h
     get_H(x, y) = 6 *( sqrt((x)+5e3) - sqrt(5e3) ) + 1
     H      = [0.0; ones(nx-2); 0.0] * [0.0 ones(ny-2)' 0.0] .* get_H.(xc, yc') # ice thickness, rectangular ice sheet with ghostpoints
-    ϕ0[1:2,:] .= 0.0 # Dirichlet BC
+    ϕ0[2,:] .= 0.0 # Dirichlet BC
+    h0[2,:]  .= 1.0
 
     # scaling factors
     H_     = 1000.0
@@ -88,7 +89,8 @@ const day   = 24*3600
         h .= max.(h, 0.0)
 
         # boundary conditions
-        ϕ[1:2, :] .= 0.0
+        ϕ[2, :] .= 0.0
+        h[2, :] .= 1.0
 
         # d_eff
         dϕ_dx  .= diff(ϕ,dims=1) ./ dx
@@ -112,7 +114,7 @@ const day   = 24*3600
         # residuals
         dhdt   .= Σ .* inn(vo) .- Γ .* inn(vc)
         dϕdt   .= (.- div_q .- dhdt .+ Λ) ./ (e_v .+ e_v_num)
-        dϕdt[1, :] .= 0.   # constant ϕ at Dirichlet B.C. points, important since dϕdt is used to update dhdt and no Dirichlet B.C. are imposed on h
+        #dϕdt[1, :] .= 0.   # constant ϕ at Dirichlet B.C. points, important since dϕdt is used to update dhdt and no Dirichlet B.C. are imposed on h
         if use_masscons_for_h
             # eq. as in B&P but additionally with storage term
             # should be equivalent to the version below (in practice not quite)
@@ -125,6 +127,7 @@ const day   = 24*3600
         Res_h  .= - (inn(h) .- inn(h0)) ./ dt .+ dhdt
 
         Res_ϕ[2, :] .= 0.      # Dirichlet B.C. points, no update
+        Res_h[2, :] .= 0.
 
         # rate of change
         dhdτ   .= Res_h .+ γ_h .* dhdτ
@@ -149,7 +152,9 @@ const day   = 24*3600
             p2 = heatmap(inn(h)')
             p3 = plot(ϕ[2:end-1, end÷2], label="ϕ")
             p4 = plot(h[2:end-1, end÷2], label="h")
-            display(plot(p1, p2, p3, p4))
+            p5 = plot(abs.(Res_ϕ[2:end-1, end÷2]), label="Res_ϕ")
+            p6 = plot(abs.(Res_h[2:end-1, end÷2]), label="Res_h")
+            display(plot(p1, p3, p5, p2, p4, p6))
             err_h = norm(Res_h) ./ length(Res_h)
             err_ϕ = norm(Res_ϕ) ./ length(Res_ϕ)
             @printf("it %d, err_h = %1.2e, err_ϕ = %1.2e \n", it, err_h, err_ϕ)
