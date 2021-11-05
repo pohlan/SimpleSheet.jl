@@ -14,15 +14,16 @@ const day   = 24*3600
     # physics
     Lx, Ly = 100e3, 20e3                  # length/width of the domain, starts at (0, 0)
     dt     = 1e7                          # physical time step
+    dt_h   = 0.5
     α      = 1.25
     β      = 1.5
     m      = 7.93e-11                           # source term for SHMIP A1 test case
-    e_v    = 0.1                                  # void ratio for englacial storage
+    e_v    = 1e-6                                  # void ratio for englacial storage
 
     # numerics
     nx, ny = 64, 32
     nout   = 1000
-    itMax  = 2*10^4
+    itMax  = 3*10^4
     γ_h    = 0.8
     γ_ϕ    = 0.8
 
@@ -54,6 +55,7 @@ const day   = 24*3600
     dx     = dx / x_
     dy     = dy / x_
     dt     = dt / t_
+    dt_h   = dt_h / t_
     H      = H ./ H_
 
     # array allocation
@@ -85,6 +87,14 @@ const day   = 24*3600
     # PT iteration loop
     for it = 1:itMax
         h .= max.(h, 0.0)
+
+        if it < 10^4 || it > 10^5
+            #e_v = 10^3
+            update_h = true
+        else
+            #e_v = 1e-6
+            update_h = false
+        end
 
         # boundary conditions
         ϕ[2, :] .= 0.0
@@ -138,8 +148,11 @@ const day   = 24*3600
         #dτ_h   .= 0.5 .* min.((abs.(ux)./dx .+ abs.(uy)./dy .+ small).^(-1), dt)
 
         # updates
-        inn(h) .= inn(h)  .+ dτ_h .* dhdτ
-        inn(ϕ) .= inn(ϕ)  .+ dτ_ϕ .* dϕdτ
+        if update_h
+            inn(h) .= inn(h)  .+ dt_h * dhdt
+        else
+            inn(ϕ) .= inn(ϕ)  .+ dτ_ϕ .* dϕdτ
+        end
 
         # plot
         if (it % nout == 0) && do_monit
@@ -151,8 +164,8 @@ const day   = 24*3600
             p5 = plot(abs.(Res_ϕ[2:end-1, end÷2]), label="abs(Res_ϕ)")
             p6 = plot(abs.(Res_h[2:end-1, end÷2]), label="abs(Res_h)")
             display(plot(p1, p3, p5, p2, p4, p6))
-            err_h = norm(Res_h) ./ length(Res_h)
-            err_ϕ = norm(Res_ϕ) ./ length(Res_ϕ)
+            err_h = norm(Res_h) #./ length(Res_h)
+            err_ϕ = norm(Res_ϕ) #./ length(Res_ϕ)
             @printf("it %d, err_h = %1.2e, err_ϕ = %1.2e \n", it, err_h, err_ϕ)
         end
     end
@@ -160,7 +173,7 @@ const day   = 24*3600
 end
 
 do_monit = true
-use_masscons_for_h = true
+use_masscons_for_h = false
 h, ϕ = simple_sheet(; do_monit=do_monit, use_masscons_for_h=use_masscons_for_h)
 
 if !do_monit
