@@ -23,7 +23,7 @@ const day   = 24*3600
     # numerics
     nx, ny = 64, 32
     nout   = 1000
-    itMax  = 10^4
+    itMax  = 10^5
     γ_h    = 0.8
     γ_ϕ    = 0.8
 
@@ -37,6 +37,7 @@ const day   = 24*3600
     get_H(x, y) = 6 *( sqrt((x)+5e3) - sqrt(5e3) ) + 1
     H      = [0.0; ones(nx-2); 0.0] * [0.0 ones(ny-2)' 0.0] .* get_H.(xc, yc') # ice thickness, rectangular ice sheet with ghostpoints
     ϕ0[1:2,:] .= 0.0 # Dirichlet BC
+    # ϕ0[end-1,:] .= 4e6
 
     # scaling factors
     H_     = 1000.0
@@ -89,6 +90,7 @@ const day   = 24*3600
 
         # boundary conditions
         ϕ[1:2, :] .= 0.0
+        # ϕ[end-1, :] .= 4e6 / ϕ_
 
         # d_eff
         dϕ_dx  .= diff(ϕ,dims=1) ./ dx
@@ -112,7 +114,6 @@ const day   = 24*3600
         # residuals
         dhdt   .= Σ .* inn(vo) .- Γ .* inn(vc)
         dϕdt   .= (.- div_q .- dhdt .+ Λ) ./ (e_v .+ e_v_num)
-        dϕdt[1, :] .= 0.   # no update at ϕ Dirichlet B.C. points, important since dϕdt is used to update dhdt and no Dirichlet B.C. are imposed on h
         if use_masscons_for_h
             # eq. as in B&P but additionally with storage term
             # should be equivalent to the version below (in practice not quite)
@@ -122,6 +123,7 @@ const day   = 24*3600
             dhdt .= dhdt .+ e_v_num.* dϕdt
         end
         Res_ϕ  .= - e_v * (inn(ϕ) .- inn(ϕ0)) ./ dt  .+ dϕdt * e_v    # without the factor e_v in both terms it produces NaNs
+        Res_ϕ[2, :] .= 0.; # Res_ϕ[end-1, :] .= 0.       # dirichlet B.C. points
         Res_h  .= - (inn(h) .- inn(h0)) ./ dt .+ dhdt
 
         # rate of change
@@ -143,9 +145,16 @@ const day   = 24*3600
         # plot
         if (it % nout == 0) && do_monit
             # visu
-            p1 = heatmap(inn(ϕ)')
-            p2 = heatmap(inn(h)')
-            display(plot(p1, p2))
+            #p1 = heatmap(inn(ϕ)', title="ϕ")
+            #p2 = heatmap(inn(h)', title="h")
+            #p3 = plot(ϕ[2:end-1, end÷2], label="ϕ")
+            #p4 = plot(h[2:end-1, end÷2], label="h")
+            p5 = heatmap(inn(abs.(Res_ϕ))', title="Res_ϕ")
+            p6 = heatmap(inn(abs.(Res_h))', title="Res_h")
+            p7 = plot(abs.(Res_ϕ[2:end-1, end÷2]), label="Res_ϕ")
+            p8 = plot(abs.(Res_h[2:end-1, end÷2]), label="Res_h")
+            #display(plot(p1, p3, p5, p2, p4, p6, p7, p8))
+            display(plot(p5, p6, p7, p8))
             err_h = norm(Res_h) ./ length(Res_h)
             err_ϕ = norm(Res_ϕ) ./ length(Res_ϕ)
             @printf("it %d, err_h = %1.2e, err_ϕ = %1.2e \n", it, err_h, err_ϕ)
@@ -155,7 +164,7 @@ const day   = 24*3600
 end
 
 do_monit = true
-use_masscons_for_h = true
+use_masscons_for_h = false
 h, ϕ = simple_sheet(; do_monit=do_monit, use_masscons_for_h=use_masscons_for_h)
 
 if !do_monit
