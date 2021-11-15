@@ -23,8 +23,8 @@ const day   = 24*3600
     # numerics
     nx, ny = 64, 32
     nout   = 1000
-    itMax  = 3*10^5
-    γ_h    = 0.94
+    itMax  = 10^5
+    γ_h    = 0.935          # the third digit can help for saving ~2e3 iterations
     γ_ϕ    = 0.91
     tol    = 1e-6
 
@@ -40,7 +40,7 @@ const day   = 24*3600
     ϕ0[2,:] .= 0.0 # Dirichlet BC
 
     # scaling factors
-    H_     = 1000.0
+    H_     = maximum(H)        # the choice of H_ also has an impact on convergence and on optimal γ etc.; in SheetModel H_ = mean(H)
     ϕ_     = 9.81 * 910 * H_
     h_     = 0.1
     x_     = max(Lx, Ly)
@@ -99,7 +99,7 @@ const day   = 24*3600
         if  err_h > 1e-3 && update_h_only # once update_h_only = false it cannot go back
             dτ_h = 1e-3
         else
-            dτ_h = 6e-6
+            dτ_h = 9.8e-6                 # optimising it to the 1e-7 digit can save a few thousand iterations
             update_h_only = false
         end
 
@@ -154,7 +154,7 @@ const day   = 24*3600
 
         # errors
         if update_h_only || iter % 1000 == 0
-            err_h = norm(Res_h[2:end, :]) / length(Res_h[2:end, :])
+            err_h = norm(Res_h) / length(Res_h)
             err_ϕ = norm(Res_ϕ) / length(Res_ϕ)
             @printf("it %d, err_h = %1.2e, err_ϕ = %1.2e \n", iter, err_h, err_ϕ)
 
