@@ -10,22 +10,23 @@ using Printf, LinearAlgebra, Statistics, Plots
 const small = eps(Float64)
 const day   = 24*3600
 
-@views function simple_sheet(; do_monit=true, use_masscons_for_h)
+@views function simple_sheet(; do_monit=true, update_h_only = true)
     # physics
     Lx, Ly = 100e3, 20e3                  # length/width of the domain, starts at (0, 0)
-    dt     = 1e7                          # physical time step
+    dt     = 1e9                          # physical time step
     dt_h   = 0.5
     α      = 1.25
     β      = 1.5
     m      = 7.93e-11                           # source term for SHMIP A1 test case
-    e_v    = 1e-6                                  # void ratio for englacial storage
+    e_v    = 0.                                  # void ratio for englacial storage
 
     # numerics
     nx, ny = 64, 32
     nout   = 1000
-    itMax  = 3*10^4
-    γ_h    = 0.8
-    γ_ϕ    = 0.8
+    itMax  = 3*10^5
+    γ_h    = 0.94
+    γ_ϕ    = 0.91
+    tol    = 1e-6
 
     # derived
     dx, dy = Lx / (nx-3), Ly / (ny-3)     # the outermost points are ghost points
@@ -79,21 +80,27 @@ const day   = 24*3600
     dτ_h   = zeros(nx-2,ny-2)
     dτ_ϕ   = zeros(nx-2,ny-2)
 
+    iters  = []
+    errs_ϕ = []
+    errs_h = []
 
     # initialise all ϕ and h fields
     ϕ = copy(ϕ0)
     h = copy(h0)
 
+    err_ϕ = 1.
+    err_h = 1.
+    iter  = 0.
+
     # PT iteration loop
-    for it = 1:itMax
+    while max(err_ϕ, err_h) > tol && iter<itMax
         h .= max.(h, 0.0)
 
-        if it < 10^4 || it > 10^5
-            #e_v = 10^3
-            update_h = true
+        if  err_h > 1e-3 && update_h_only # once update_h_only = false it cannot go back
+            dτ_h = 1e-3
         else
-            #e_v = 1e-6
-            update_h = false
+            dτ_h = 6e-6
+            update_h_only = false
         end
 
         # boundary conditions
@@ -120,65 +127,65 @@ const day   = 24*3600
 
         # residuals
         dhdt   .= Σ .* inn(vo) .- Γ .* inn(vc)
-        dϕdt   .= (.- div_q .- dhdt .+ Λ) ./ e_v
+        dϕdt   .= .- div_q .- dhdt .+ Λ
 
-        if use_masscons_for_h
-            # eq. as in B&P but additionally with storage term
-            # should be equivalent to the version below (in practice not quite)
-            dhdt .= .- dϕdt .* e_v .- div_q .+ Λ
-
-        # else ODE is used , eq. as used in GlaDS
-        end
-
-        Res_ϕ  .= - e_v * (inn(ϕ) .- inn(ϕ0)) ./ dt  .+ dϕdt * e_v    # without the factor e_v in both terms it produces NaNs
+        Res_ϕ  .= - e_v * (inn(ϕ) .- inn(ϕ0)) ./ dt  .+ dϕdt
         Res_h  .= - (inn(h) .- inn(h0)) ./ dt .+ dhdt
 
-        Res_ϕ[2, :] .= 0.      # Dirichlet B.C. points, no update
+        Res_ϕ[1, :] .= 0.      # Dirichlet B.C. points, no update
 
         # rate of change
         dhdτ   .= Res_h .+ γ_h .* dhdτ
         dϕdτ   .= Res_ϕ .+ γ_ϕ .* dϕdτ
 
-        # pseudo-timestep as calculated so far:
+        # pseudo-timestep
         dτ_ϕ   .= min(dx, dy)^2 ./ inn(d_eff) ./ 4.1
-        dτ_h   .= 1e-6 # min(dx, dy)   ./ (max.(abs.(ux), abs.(uy)) .+ small) ./ 4.1
-
-        # exactly as it is in Büeler & van Pelt (just slightly different)
-        #dτ_ϕ   .= 0.5 .* e_v ./ inn(d_eff) .* (1/dx^2 + 1/dy^2 + small)^(-1)
-        #dτ_h   .= 0.5 .* min.((abs.(ux)./dx .+ abs.(uy)./dy .+ small).^(-1), dt)
 
         # updates
-        if update_h
-            inn(h) .= inn(h)  .+ dt_h * dhdt
+        if update_h_only
+            # inn(h) .= inn(h)  .+ dt_h * dhdt    # explicit
+             inn(h) .= inn(h)  .+ dτ_h .* dhdτ # PT
         else
             inn(ϕ) .= inn(ϕ)  .+ dτ_ϕ .* dϕdτ
+            inn(h) .= inn(h)  .+ dτ_h .* dhdτ
+        end
+
+        iter += 1
+
+        # errors
+        if update_h_only || iter % 1000 == 0
+            err_h = norm(Res_h[2:end, :]) / length(Res_h[2:end, :])
+            err_ϕ = norm(Res_ϕ) / length(Res_ϕ)
+            @printf("it %d, err_h = %1.2e, err_ϕ = %1.2e \n", iter, err_h, err_ϕ)
+
+            push!(iters, iter)
+            push!(errs_h, err_h)
+            push!(errs_ϕ, err_ϕ)
         end
 
         # plot
-        if (it % nout == 0) && do_monit
+        if (iter % nout == 0) && do_monit
             # visu
-            p1 = heatmap(inn(ϕ)')
-            p2 = heatmap(inn(h)')
-            p3 = plot(ϕ[2:end-1, end÷2], label="ϕ")
-            p4 = plot(h[2:end-1, end÷2], label="h")
-            p5 = plot(abs.(Res_ϕ[2:end-1, end÷2]), label="abs(Res_ϕ)")
-            p6 = plot(abs.(Res_h[2:end-1, end÷2]), label="abs(Res_h)")
+            p1 = heatmap(inn(ϕ .* ϕ_)')
+            p2 = heatmap(inn(h .* h_)')
+            p3 = plot(ϕ[2:end-1, end÷2] .* ϕ_, label="ϕ")
+            p4 = plot(h[2:end-1, end÷2] .* h_, label="h")
+            p5 = plot(abs.(Res_ϕ[:, end÷2]), label="abs(Res_ϕ)")
+            p6 = plot(abs.(Res_h[:, end÷2]), label="abs(Res_h)")
             display(plot(p1, p3, p5, p2, p4, p6))
-            err_h = norm(Res_h) #./ length(Res_h)
-            err_ϕ = norm(Res_ϕ) #./ length(Res_ϕ)
-            @printf("it %d, err_h = %1.2e, err_ϕ = %1.2e \n", it, err_h, err_ϕ)
         end
     end
-    return h, ϕ
+    return h * h_, ϕ * ϕ_, Res_ϕ, Res_h, iters, errs_h, errs_ϕ
 end
 
 do_monit = true
-use_masscons_for_h = false
-h, ϕ = simple_sheet(; do_monit=do_monit, use_masscons_for_h=use_masscons_for_h)
+update_h_only = true
+h, ϕ, Res_ϕ, Res_h, iters, errs_h, errs_ϕ = simple_sheet(; do_monit=do_monit, update_h_only=update_h_only)
 
-if !do_monit
-    # visu
-    p1 = heatmap(inn(ϕ)')
-    p2 = heatmap(inn(h)')
-    display(plot(p1, p2))
-end
+p1 = plot(ϕ[2:end-1, end÷2], label="ϕ", xlabel="x", title="ϕ cross-sec.")
+p2 = plot(h[2:end-1, end÷2], label="h", xlabel="x", title="h cross-sec.")
+p3 = plot(iters, errs_ϕ, xlabel="# iterations", title="residual error", label="err_ϕ", yscale=:log10)
+p4 = plot(iters, errs_h, xlabel="# iterations", title="residual error", label="err_h", yscale=:log10)
+p5 = plot(abs.(Res_ϕ[:, end÷2]), label="abs(Res_ϕ)", xlabel="x", title="res cross-sec.")
+p6 = plot(abs.(Res_h[:, end÷2]), label="abs(Res_h)", xlabel="x", title="res cross-sec.")
+display(plot(p1, p3, p5, p2, p4, p6))
