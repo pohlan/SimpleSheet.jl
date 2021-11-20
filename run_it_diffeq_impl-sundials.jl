@@ -93,18 +93,18 @@ function make_ode_reg(; use_masscons_for_h=false)
             vo     = gt(vo_, u)
             vc     = gt(vc_, u)
 
-            h, ϕ = u.x[1], u.x[2]
+            h, ϕ = reshape(u[1:end÷2], nx, ny), reshape(u[end÷2+1:end], nx, ny)
             ## to avoid errors from Complex numbers:
             h .= max.(h,0)
             # alternative:
             #h .= abs.(h)
 
             # dirichlet boundary conditions to pw = 0
-            # i.e. just set to some number
             ϕ[1:2,:] .= 0.0
 
-            dhdt = du.x[1]
-            dϕdt = du.x[2]
+            # dhdt = du.x[1]
+            # dϕdt = inn(du.x[2])
+            dhdt, dϕdt = reshape(du[1:end÷2], nx, ny), reshape(du[end÷2+1:end],nx,ny)
             dϕdt[1,:] .= 0.0; dϕdt[end,:] .= 0.0
             dϕdt[:,1] .= 0.0; dϕdt[:,end] .= 0.0
 
@@ -128,9 +128,6 @@ function make_ode_reg(; use_masscons_for_h=false)
             div_q  .= (diff(flux_x[:,2:end-1],dims=1) ./ dx .+ diff(flux_y[2:end-1,:],dims=2) ./ dy)
             inn(dϕdt)   .= (.- div_q .- inn(dhdt) .+ Λ) ./ (e_v .+ e_v_num)
 
-            # Dirichlet nodes have no time evolution:
-            dϕdt[2,:] .= 0.0
-
             # update taking only non-regularization e_v into account
             if use_masscons_for_h
                 # NOTE: above two are identical (modulus floating point errors)
@@ -148,61 +145,37 @@ end
 ode!, ϕ0, h0, scales, H, chunksize = make_ode_reg(;use_masscons_for_h=false)
 
 const day = 24*3600
-u0 = ArrayPartition(copy(h0), copy(ϕ0))
-du0 = ArrayPartition(copy(h0), copy(ϕ0))
+tspan = (0, 5day / scales.t_)
+
+# Sundials does not work with ArrayPartition:
+u0 = ArrayPartition(h0, ϕ0)[:]
+du0 = ArrayPartition(copy(h0), copy(ϕ0))[:]
 
 ode!(du0, u0, nothing, 0.0)
 @time ode!(du0, u0, nothing, 0.0) # 1e-3s
 @inferred ode!(du0, u0, nothing, 0.0)
+## note there are a few Core.box around!
+#@code_warntype ode!(du0, u0, nothing, 0.0)
 
-# Try: Jac-free Krylov
-using DiffEqOperators
-Jv = JacVecOperator(ode!, u0, (1,), 0.0)
+prob = ODEProblem(ode!, u0, tspan);
 
-f2 = ODEFunction(ode!; jac_prototype=Jv);
+using Sundials
+@time sol = solve(prob, CVODE_BDF(linear_solver=:GMRES));
 
-tspan = (0, 5day / scales.t_)
-u0 = ArrayPartition(copy(h0), copy(ϕ0))
-du0 = ArrayPartition(copy(h0), copy(ϕ0))
-prob = ODEProblem(f2, u0, tspan, ());
-println("Running implicit solver for tspan=$tspan")
-@time sol = solve(prob, TRBDF2(autodiff=true, chunk_size=chunksize, linsolve=LinSolveGMRES()));
-#@time sol = solve(prob, TRBDF2(autodiff=true, chunk_size=chunksize));
+# ##############################################################
+# if length(sol)>1
+#     hend = sol.u[end].x[1]*scales.h_;
+#     ϕend = sol.u[end].x[2]*scales.ϕ_;
+#     N = 910*9.81*H*scales.H_ - ϕend;
 
-## Unstable & abort:
-# @time sol = solve(prob, ROS34PW2(autodiff=true, chunk_size=chunksize));
-# @time sol = solve(prob, QNDF(autodiff=true, chunk_size=chunksize, linsolve=LinSolveGMRES()));
-# @time sol = solve(prob, FBDF(autodiff=true, chunk_size=chunksize, linsolve=LinSolveGMRES()));
+#     display(plot(heatmap(inn(hend')),
+#                  heatmap(inn(ϕend'))))
 
-# # Try: direct solver:
+#     display(plot(plot(ϕend[2:end-1,end÷2]/1e6, xlabel="x (gridpoints)", ylabel="ϕ (MPa)"),
+#                  plot(ϕend[2:end-1,end÷2]/scales.ϕ_, xlabel="x (gridpoints)", ylabel="ϕ ()"),
+#                  plot(hend[2:end-1,end÷2], xlabel="x (gridpoints)", ylabel="h (m)"),
+#                  plot(hend[2:end-1,end÷2]/scales.h_, xlabel="x (gridpoints)", ylabel="h ()"),
+#                  layout=(2,2), reuse=false))
 
-# ## Using SparsityDetection
-# using SparsityDetection
-# #using Symbolics
-# input = u0 .*0
-# input .= rand(size(u0)...);
-# output = u0 .*0
-# output .= rand(size(u0)...);
-# # FiniteDiff.finite_difference_jacobian(x->obj(x,(),0.0), input)
-# sparsity_pattern = jacobian_sparsity(ode!, output, input, (), 0.0)
-# jac_sparsity = Float64.(sparse(sparsity_pattern))
-
-
-
-############################################################################################################################
-if length(sol)>1
-    hend = sol.u[end].x[1]*scales.h_;
-    ϕend = sol.u[end].x[2]*scales.ϕ_;
-    N = 910*9.81*H*scales.H_ - ϕend;
-
-    display(plot(heatmap(inn(hend')),
-                 heatmap(inn(ϕend'))))
-
-    display(plot(plot(ϕend[2:end-1,end÷2]/1e6, xlabel="x (gridpoints)", ylabel="ϕ (MPa)"),
-                 plot(ϕend[2:end-1,end÷2]/scales.ϕ_, xlabel="x (gridpoints)", ylabel="ϕ ()"),
-                 plot(hend[2:end-1,end÷2], xlabel="x (gridpoints)", ylabel="h (m)"),
-                 plot(hend[2:end-1,end÷2]/scales.h_, xlabel="x (gridpoints)", ylabel="h ()"),
-                 layout=(2,2), reuse=false))
-
-    display(plot(sol.t*scales.t_/day, diff(sol.t*scales.t_), reuse=false, xlabel="t (day)", ylabel="timestep (s)"))#, yscale=:log10))
-end
+#     display(plot(sol.t*scales.t_/day, diff(sol.t*scales.t_), reuse=false, xlabel="t (day)", ylabel="timestep (s)"))#, yscale=:log10))
+# end
