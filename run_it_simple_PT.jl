@@ -10,7 +10,7 @@ using Printf, LinearAlgebra, Statistics, Plots
 const small = eps(Float64)
 const day   = 24*3600
 
-@views function simple_sheet(; do_monit=true, update_h_only = true)
+@views function simple_sheet(; do_monit=true, update_h_only = true, e_v_num=0, set_h_bc=true)
     # physics
     Lx, Ly = 100e3, 20e3                  # length/width of the domain, starts at (0, 0)
     dt     = 1e9                          # physical time step
@@ -24,20 +24,26 @@ const day   = 24*3600
     nx, ny = 64, 32
     nout   = 1000
     itMax  = 10^5
-    γ_h    = 0.935          # the third digit can help for saving ~2e3 iterations
-    γ_ϕ    = 0.91
+    γ_h    = 0.8          # the third digit can help for saving ~2e3 iterations
+    γ_ϕ    = 0.8
     tol    = 1e-6
 
     # derived
     dx, dy = Lx / (nx-3), Ly / (ny-3)     # the outermost points are ghost points
     xc, yc = LinRange(-dx, Lx+dx, nx), LinRange(-dy, Ly+dy, ny)
 
-    # initial conditions
-    ϕ0     = 100. * ones(nx, ny)
-    h0     = 0.04 * ones(nx, ny) # initial fields of ϕ and h
+    # ice thickness
+    H           = zeros(nx, ny)
     get_H(x, y) = 6 *( sqrt((x)+5e3) - sqrt(5e3) ) + 1
-    H      = [0.0; ones(nx-2); 0.0] * [0.0 ones(ny-2)' 0.0] .* get_H.(xc, yc') # ice thickness, rectangular ice sheet with ghostpoints
+    inn(H)     .= inn(get_H.(xc, yc'))
+
+    # initial conditions
+    ϕ0       = zeros(nx, ny)
+    inn(ϕ0) .= 100.
     ϕ0[2,:] .= 0.0 # Dirichlet BC
+
+    h0       = zeros(nx, ny)
+    inn(h0) .= 0.04
 
     # scaling factors
     H_     = maximum(H)        # the choice of H_ also has an impact on convergence and on optimal γ etc.; in SheetModel H_ = mean(H)
@@ -58,6 +64,12 @@ const day   = 24*3600
     dt     = dt / t_
     dt_h   = dt_h / t_
     H      = H ./ H_
+
+    if set_h_bc
+        # h bc
+        h_bc     = (Γ/Σ * (0.91 .* H[2,2] - ϕ0[2,2]).^3 .+ 1.).^(-1)   # solution for h if dhdt=0 (Σ vo = Γ vc)
+        h0[2,:] .= h_bc
+    end
 
     # array allocation
     dϕ_dx  = zeros(nx-1,ny  )
@@ -99,12 +111,15 @@ const day   = 24*3600
         if  err_h > 1e-3 && update_h_only # once update_h_only = false it cannot go back
             dτ_h = 1e-3
         else
-            dτ_h = 9.8e-6                 # optimising it to the 1e-7 digit can save a few thousand iterations
+            dτ_h = 2e-5                 # optimising it to the 1e-7 digit can save a few thousand iterations
             update_h_only = false
         end
 
         # boundary conditions
         ϕ[2, :] .= 0.0
+        if set_h_bc
+            h[2, :] .= h_bc
+        end
 
         # d_eff
         dϕ_dx  .= diff(ϕ,dims=1) ./ dx
@@ -126,13 +141,16 @@ const day   = 24*3600
         div_q  .= diff(flux_x[:,2:end-1],dims=1) ./ dx .+ diff(flux_y[2:end-1,:],dims=2) ./ dy
 
         # residuals
-        dhdt   .= Σ .* inn(vo) .- Γ .* inn(vc)
-        dϕdt   .= .- div_q .- dhdt .+ Λ
+        dϕdt   .= (.- div_q .- dhdt .+ Λ)
+        dhdt   .= Σ .* inn(vo) .- Γ .* inn(vc) .+ e_v_num .* dϕdt
 
-        Res_ϕ  .= - e_v * (inn(ϕ) .- inn(ϕ0)) ./ dt  .+ dϕdt
+        Res_ϕ  .= - (e_v + e_v_num) * (inn(ϕ) .- inn(ϕ0)) ./ dt  .+ dϕdt
         Res_h  .= - (inn(h) .- inn(h0)) ./ dt .+ dhdt
 
         Res_ϕ[1, :] .= 0.      # Dirichlet B.C. points, no update
+        if set_h_bc
+            Res_h[1, :] .= 0.
+        end
 
         # rate of change
         dhdτ   .= Res_h .+ γ_h .* dhdτ
@@ -178,9 +196,7 @@ const day   = 24*3600
     return h * h_, ϕ * ϕ_, Res_ϕ, Res_h, iters, errs_h, errs_ϕ
 end
 
-do_monit = true
-update_h_only = true
-h, ϕ, Res_ϕ, Res_h, iters, errs_h, errs_ϕ = simple_sheet(; do_monit=do_monit, update_h_only=update_h_only)
+h, ϕ, Res_ϕ, Res_h, iters, errs_h, errs_ϕ = simple_sheet(; do_monit=true, update_h_only=false, e_v_num=1e-1, set_h_bc=true)
 
 p1 = plot(ϕ[2:end-1, end÷2], label="ϕ", xlabel="x", title="ϕ cross-sec.")
 p2 = plot(h[2:end-1, end÷2], label="h", xlabel="x", title="h cross-sec.")
