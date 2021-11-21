@@ -1,10 +1,7 @@
 # Solving the sheet using OrdinaryDiffEq solvers (ROCK4)
 #
 # TODO:
-# - try the mass-conservation equation used by B&P as well
 # - try on the GPU
-
-# - also try implicit solvers, but that will be a lot more work
 
 using Printf, LinearAlgebra, Statistics, Plots, Test, RecursiveArrayTools, OrdinaryDiffEq,
     Infiltrator
@@ -35,14 +32,6 @@ function make_ode_reg(; use_masscons_for_h=false)
     dx, dy = Lx / (nx-3), Ly / (ny-3)     # the outermost points are ghost points
     xc, yc = LinRange(-dx, Lx+dx, nx), LinRange(-dy, Ly+dy, ny)
 
-    # initial conditions
-    ϕ0     = 100. * ones(nx, ny)
-    h0     = 0.04 * ones(nx, ny) # initial fields of ϕ and h
-    h0[1,:] .=0;     h0[end,:] .=0; h0[:,1] .=0; h0[:,end] .=0;
-    get_H(x, y) = 6 *( sqrt((x)+5e3) - sqrt(5e3) ) + 1
-    H      = [0.0; ones(nx-2); 0.0] * [0.0 ones(ny-2)' 0.0] .* get_H.(xc, yc') # ice thickness, rectangular ice sheet with ghostpoints
-    ϕ0[1:2,:] .= 0.0 # Dirichlet BC
-
     # scaling factors
     H_     = 1000.0
     ϕ_     = 9.81 * 910 * H_
@@ -54,12 +43,28 @@ function make_ode_reg(; use_masscons_for_h=false)
     Γ      = 3.375e-25 * ϕ_^3 * x_ / q_ * 2/27  # the last bit is 2/n^n from vc
     Λ      = m * x_ / q_
 
-    # apply the scaling and convert to correct data type
+    # ice thickness
+    H           = zeros(nx, ny)
+    get_H(x, y) = 6 *( sqrt((x)+5e3) - sqrt(5e3) ) + 1
+    inn(H)     .= inn(get_H.(xc, yc'))
+
+    # initial conditions
+    ϕ0       = zeros(nx, ny)
+    inn(ϕ0) .= 100.
+    ϕ0[2,:] .= 0.0 # Dirichlet BC
+
+    h0       = zeros(nx, ny)
+    inn(h0) .= 0.04
+
+    # apply the scaling
     ϕ0     = ϕ0 ./ ϕ_
     h0     = h0 ./ h_
     dx     = dx / x_
     dy     = dy / x_
     H      = H ./ H_
+
+    h_bc     = (Γ/Σ * (0.91 .* H[2,2] - ϕ0[2,2]).^3 .+ 1.).^(-1)   # solution for h if dhdt=0 (Σ vo = Γ vc)
+    h0[2,:] .= h_bc
 
     # array allocationsize(Λ)
     dϕ_dx  = zeros(nx-1,ny  )
@@ -85,7 +90,10 @@ function make_ode_reg(; use_masscons_for_h=false)
             #h .= abs.(h)
 
             # dirichlet boundary conditions to pw = 0
-            ϕ[1:2,:] .= 0.0
+            ϕ[2,:] .= 0.0
+            if use_masscons_for_h
+                h[2,:] .= h_bc
+            end
 
             dhdt = du.x[1]
             dϕdt = inn(du.x[2])
@@ -115,6 +123,7 @@ function make_ode_reg(; use_masscons_for_h=false)
             if use_masscons_for_h
                 # NOTE: above two are identical (modulus floating point errors)
                 inn(dhdt) .= .-e_v.*dϕdt .- div_q .+ Λ
+                dhdt[1,:] .= 0
             else
                 # dhdt[3:end-1,2:end-1] .= dhdt[3:end-1,2:end-1] .+ e_v_num.*dϕdt[2:end,:]
                 inn(dhdt) .= inn(dhdt) .+ e_v_num.*dϕdt
@@ -126,16 +135,16 @@ function make_ode_reg(; use_masscons_for_h=false)
     return ode!, copy(ϕ0), copy(h0), (;ϕ_, h_, x_, q_, t_, H_, Σ, Γ, Λ), H
 end
 
-ode!, ϕ0, h0, scales, H = make_ode_reg(;use_masscons_for_h=false)
+ode!, ϕ0, h0, scales, H = make_ode_reg(;use_masscons_for_h=true)
 
 const day = 24*3600
-tspan = (0, 0.1day / scales.t_)
+tspan = (0, 100day / scales.t_)
 u0 = ArrayPartition(h0, ϕ0)
 du0 = ArrayPartition(copy(h0), copy(ϕ0))
 
 ode!(du0, u0, nothing, 0.0)
-@time ode!(du0, u0, nothing, 0.0) # 1e-3s
-@inferred ode!(du0, u0, nothing, 0.0)
+# @time ode!(du0, u0, nothing, 0.0) # 1e-3s
+# @inferred ode!(du0, u0, nothing, 0.0)
 ## note there are a few Core.box around!
 #@code_warntype ode!(du0, u0, nothing, 0.0)
 
@@ -154,8 +163,8 @@ hend = sol.u[end].x[1]*scales.h_;
 ϕend = sol.u[end].x[2]*scales.ϕ_;
 N = 910*9.81*H*scales.H_ - ϕend;
 
-display(plot(heatmap(inn(hend')),
-             heatmap(inn(ϕend'))))
+# display(plot(heatmap(inn(hend')),
+#              heatmap(inn(ϕend'))))
 
 display(plot(plot(ϕend[2:end-1,end÷2]/1e6, xlabel="x (gridpoints)", ylabel="ϕ (MPa)"),
              plot(ϕend[2:end-1,end÷2]/scales.ϕ_, xlabel="x (gridpoints)", ylabel="ϕ ()"),
@@ -163,4 +172,4 @@ display(plot(plot(ϕend[2:end-1,end÷2]/1e6, xlabel="x (gridpoints)", ylabel="ϕ
              plot(hend[2:end-1,end÷2]/scales.h_, xlabel="x (gridpoints)", ylabel="h ()"),
              layout=(2,2), reuse=false))
 
-display(plot(sol.t*scales.t_/day, diff(sol.t*scales.t_), reuse=false, xlabel="t (day)", ylabel="timestep (s)"))#, yscale=:log10))
+# display(plot(sol.t*scales.t_/day, diff(sol.t*scales.t_), reuse=false, xlabel="t (day)", ylabel="timestep (s)"))#, yscale=:log10))
