@@ -164,10 +164,10 @@ f2 = ODEFunction(ode!; jac_prototype=Jv);
 tspan = (0, 5day / scales.t_)
 u0 = ArrayPartition(copy(h0), copy(ϕ0))
 du0 = ArrayPartition(copy(h0), copy(ϕ0))
-prob = ODEProblem(f2, u0, tspan, ());
+prob = ODEProblem(f2, u0, tspan, (1,));
 println("Running implicit solver for tspan=$tspan")
 @time sol = solve(prob, TRBDF2(autodiff=true, chunk_size=chunksize, linsolve=LinSolveGMRES()));
-#@time sol = solve(prob, TRBDF2(autodiff=true, chunk_size=chunksize));
+#@time sol2 = solve(prob, TRBDF2(autodiff=true, chunk_size=chunksize));
 
 ## Unstable & abort:
 # @time sol = solve(prob, ROS34PW2(autodiff=true, chunk_size=chunksize));
