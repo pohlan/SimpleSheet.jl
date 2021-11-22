@@ -118,7 +118,7 @@ function make_ode_reg(; use_masscons_for_h=false,
 
             dhdt   .= (Σ .* vo .- Γ .* vc)
             div_q  .= (diff(flux_x[:,2:end-1],dims=1) ./ dx .+ diff(flux_y[2:end-1,:],dims=2) ./ dy)
-            dϕdt   .= (.- div_q .- inn(dhdt) .+ Λ) ./ (e_v .+ e_v_num)
+            dϕdt   .= (.- div_q .- inn(dhdt) .+ Λ) ./ max.(e_v .+ e_v_num, small)
             ## This fixes the issue reported in:
             ## https://github.com/pohlan/SimpleSheet.jl/pull/4#issue-1041245216
             dϕdt[1,:] .= 0 # BCs
