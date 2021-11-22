@@ -16,8 +16,9 @@ pyplot()
 
 const small    = eps(Float64)
 
-function make_ode_reg(; use_masscons_for_h=false,
-                        e_v_num=0                # regularization void ratio
+function make_ode_reg(; set_h_bc=false,         # whether to set dirichlet bc for h (at the nodes where ϕ d. bc are set)
+                                                # note: false is only applied if e_v_num = 0, otherwise bc are required
+                        e_v_num=0               # regularization void ratio
                         )
     # physics
     Lx, Ly = 100e3, 20e3                  # length/width of the domain, starts at (0, 0)
@@ -28,10 +29,9 @@ function make_ode_reg(; use_masscons_for_h=false,
 
     # numerics
     nx, ny = 64, 32
-
-    # derived
     dx, dy = Lx / (nx-3), Ly / (ny-3)     # the outermost points are ghost points
     xc, yc = LinRange(-dx, Lx+dx, nx), LinRange(-dy, Ly+dy, ny)
+    if (e_v_num > 0.) set_h_bc=true end
 
     # scaling factors
     H_     = 1000.0
@@ -64,7 +64,7 @@ function make_ode_reg(; use_masscons_for_h=false,
     dy     = dy / x_
     H      = H ./ H_
 
-    if use_masscons_for_h
+    if set_h_bc
         h_bc     = (Γ/Σ * (0.91 .* H[2,2] - ϕ0[2,2]).^3 .+ 1.).^(-1)   # solution for h if dhdt=0 (Σ vo = Γ vc)
         h0[2,:] .= h_bc
     end
@@ -94,11 +94,11 @@ function make_ode_reg(; use_masscons_for_h=false,
 
             # dirichlet boundary conditions to pw = 0
             ϕ[2,:] .= 0.0
-            if use_masscons_for_h
+            if set_h_bc
                 h[2,:] .= h_bc
             end
 
-            dhdt = du.x[1]
+            dhdt = inn(du.x[1])
             dϕdt = inn(du.x[2])
             # d_eff
             dϕ_dx  .= diff(ϕ, dims=1) ./ dx
@@ -113,23 +113,16 @@ function make_ode_reg(; use_masscons_for_h=false,
             # rate of changes
             flux_x .= .- d_eff[2:end,:] .* max.(dϕ_dx, 0.0) .- d_eff[1:end-1,:] .* min.(dϕ_dx, 0.0)
             flux_y .= .- d_eff[:,2:end] .* max.(dϕ_dy, 0.0) .- d_eff[:,1:end-1] .* min.(dϕ_dy, 0.0)
+            div_q  .= (diff(flux_x[:,2:end-1],dims=1) ./ dx .+ diff(flux_y[2:end-1,:],dims=2) ./ dy)
             vo     .= (h .< 1.0) .* (1.0 .- h)
             vc     .=  h .* (0.91 .* H .- ϕ).^3
 
-            dhdt   .= (Σ .* vo .- Γ .* vc)
-            div_q  .= (diff(flux_x[:,2:end-1],dims=1) ./ dx .+ diff(flux_y[2:end-1,:],dims=2) ./ dy)
-            dϕdt   .= (.- div_q .- inn(dhdt) .+ Λ) ./ max.(e_v .+ e_v_num, small)
-            ## This fixes the issue reported in:
-            ## https://github.com/pohlan/SimpleSheet.jl/pull/4#issue-1041245216
-            dϕdt[1,:] .= 0 # BCs
-            # update taking only non-regularization e_v into account
-            if use_masscons_for_h
-                # NOTE: above two are identical (modulus floating point errors)
-                inn(dhdt) .= .-e_v.*dϕdt .- div_q .+ Λ
+            dhdt      .= (Σ .* inn(vo) .- Γ .* inn(vc))
+            dϕdt      .= (.- div_q .- dhdt .+ Λ) ./ max.(e_v .+ e_v_num, small)
+            dϕdt[1,:] .= 0 # BCs, fixes https://github.com/pohlan/SimpleSheet.jl/pull/4#issue-1041245216
+            dhdt     .+= e_v_num.*dϕdt
+            if set_h_bc
                 dhdt[1,:] .= 0
-            else
-                # dhdt[3:end-1,2:end-1] .= dhdt[3:end-1,2:end-1] .+ e_v_num.*dϕdt[2:end,:]
-                inn(dhdt) .= inn(dhdt) .+ e_v_num.*dϕdt
             end
 
             return nothing
@@ -138,10 +131,10 @@ function make_ode_reg(; use_masscons_for_h=false,
     return ode!, copy(ϕ0), copy(h0), (;ϕ_, h_, x_, q_, t_, H_, Σ, Γ, Λ), H
 end
 
-ode!, ϕ0, h0, scales, H = make_ode_reg(;use_masscons_for_h=true, e_v_num=1e-2)
+ode!, ϕ0, h0, scales, H = make_ode_reg(;set_h_bc=false, e_v_num=0)
 
 const day = 24*3600
-tspan = (0, 100day / scales.t_)
+tspan = (0, 1day / scales.t_)
 u0 = ArrayPartition(h0, ϕ0)
 du0 = ArrayPartition(copy(h0), copy(ϕ0))
 

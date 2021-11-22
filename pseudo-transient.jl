@@ -10,7 +10,12 @@ using Printf, LinearAlgebra, Statistics, Plots
 const small = eps(Float64)
 const day   = 24*3600
 
-@views function simple_sheet(; do_monit=true, update_h_only = true, e_v_num=0, set_h_bc=true)
+@views function simple_sheet(;  do_monit=true,          # enable/disable plotting of intermediate results
+                                set_h_bc=false,         # whether to set dirichlet bc for h (at the nodes where ϕ d. bc are set)
+                                                        # note: false is only applied if e_v_num = 0, otherwise bc are required
+                                e_v_num=0,              # regularisation void ratio
+                                update_h_only=true      # true: split step scheme, only update h in the beginning
+                                )
     # physics
     Lx, Ly = 100e3, 20e3                  # length/width of the domain, starts at (0, 0)
     dt     = 1e9                          # physical time step
@@ -23,10 +28,11 @@ const day   = 24*3600
     # numerics
     nx, ny = 64, 32
     nout   = 1000
-    itMax  = 10^5
+    itMax  = 2*10^4
     γ_h    = 0.8          # the third digit can help for saving ~2e3 iterations
     γ_ϕ    = 0.8
     tol    = 1e-6
+    if (e_v_num > 0.) set_h_bc=true end
 
     # derived
     dx, dy = Lx / (nx-3), Ly / (ny-3)     # the outermost points are ghost points
@@ -66,7 +72,6 @@ const day   = 24*3600
     H      = H ./ H_
 
     if set_h_bc
-        # h bc
         h_bc     = (Γ/Σ * (0.91 .* H[2,2] - ϕ0[2,2]).^3 .+ 1.).^(-1)   # solution for h if dhdt=0 (Σ vo = Γ vc)
         h0[2,:] .= h_bc
     end
@@ -197,7 +202,7 @@ const day   = 24*3600
     return h * h_, ϕ * ϕ_, Res_ϕ, Res_h, iters, errs_h, errs_ϕ
 end
 
-h, ϕ, Res_ϕ, Res_h, iters, errs_h, errs_ϕ = simple_sheet(; do_monit=true, update_h_only=false, e_v_num=1e-1, set_h_bc=true)
+h, ϕ, Res_ϕ, Res_h, iters, errs_h, errs_ϕ = simple_sheet(; do_monit=true, update_h_only=false, e_v_num=0, set_h_bc=false)
 
 p1 = plot(ϕ[2:end-1, end÷2], label="ϕ", xlabel="x", title="ϕ cross-sec.")
 p2 = plot(h[2:end-1, end÷2], label="h", xlabel="x", title="h cross-sec.")

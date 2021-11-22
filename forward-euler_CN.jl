@@ -12,8 +12,9 @@ const day   = 24*3600
 
 @views function simple_sheet(; do_monit=true,   # enable/disable plotting of intermediate results
                                set_h_bc=false,  # whether to set dirichlet bc for h (at the nodes where ϕ d. bc are set)
-                               use_CFL=false,   # true: use CFL criterion for dt, false: use fixed dt=1s
+                                                # note: false is only applied if e_v_num = 0, otherwise bc are required
                                e_v_num=0,       # regularisation void ratio
+                               use_CFL=false,   # true: use CFL criterion for dt, false: use fixed dt=1s
                                CN=0             # Crank-Nicolson (CN=0.5), Forward Euler (CN=0)
                                )
     # physics
@@ -28,6 +29,7 @@ const day   = 24*3600
     # numerics
     nx, ny = 64, 32
     nout   = 1e4
+    if (e_v_num > 0.) set_h_bc=true end
 
     # derived
     nt     = Int(ttot ÷ dt)
