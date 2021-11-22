@@ -30,7 +30,7 @@ const day   = 24*3600
     gradϕ  .= sqrt.( av_xi(dϕ_dx).^2 .+ av_yi(dϕ_dy).^2 )
     d_eff[2:end-1,2:end-1]  .= inn(h).^α .* (gradϕ .+ small).^(β-2)
 
-    # rate if changes
+    # rate of change
     flux_x .= .- d_eff[2:end,:] .* max.(dϕ_dx, 0.0) .- d_eff[1:end-1,:] .* min.(dϕ_dx, 0.0)
     flux_y .= .- d_eff[:,2:end] .* max.(dϕ_dy, 0.0) .- d_eff[:,1:end-1] .* min.(dϕ_dy, 0.0)
     div_q  .= diff(flux_x[:,2:end-1],dims=1) ./ dx .+ diff(flux_y[2:end-1,:],dims=2) ./ dy
@@ -54,9 +54,16 @@ end
     return
 end
 
-@views function update_RK4!(h, ϕ, K1_h, K1_ϕ, K2_h, K2_ϕ, K3_h, K3_ϕ, K4_h, K4_ϕ, dt)
+@views function update_RK4!(h, ϕ, K1_h, K1_ϕ, K2_h, K2_ϕ, K3_h, K3_ϕ, K4_h, K4_ϕ, dt, set_h_bc, h_bc)
     inn(h) .= inn(h) .+ dt .* (K1_h .+ 2.0 .* K2_h .+ 2.0 .* K3_h .+ K4_h) ./ 6.0
     inn(ϕ) .= inn(ϕ) .+ dt .* (K1_ϕ .+ 2.0 .* K2_ϕ .+ 2.0 .* K3_ϕ .+ K4_ϕ) ./ 6.0
+
+    h .= max.(h, 0.0)
+    # dirichlet boundary conditions to pw = 0
+    ϕ[2,:] .= 0.0
+    if set_h_bc
+        h[2,:] .= h_bc
+    end
     return
 end
 
@@ -69,7 +76,7 @@ end
     # physics
     Lx, Ly = 100e3, 20e3                  # length/width of the domain, starts at (0, 0)
     dt     = 1.0                          # physical time step
-    ttot   = 0.1day
+    ttot   = 1day
     α      = 1.25
     β      = 1.5
     m      = 7.93e-11                           # source term for SHMIP A1 test case
@@ -162,7 +169,7 @@ end
         cumul_RK4!(Tmp_h, Tmp_ϕ, h, ϕ, K3_h, K3_ϕ, dt)
 
         compute_resid(K4_h, K4_ϕ, Tmp_h, Tmp_ϕ, dϕ_dx, dϕ_dy, gradϕ, d_eff, flux_x, flux_y, div_q, vo, vc, α, small, β, H, Σ, Γ, Λ, e_v, e_v_num, dx, dy, set_h_bc, h_bc)
-        update_RK4!(h, ϕ, K1_h, K1_ϕ, K2_h, K2_ϕ, K3_h, K3_ϕ, K4_h, K4_ϕ, dt)
+        update_RK4!(h, ϕ, K1_h, K1_ϕ, K2_h, K2_ϕ, K3_h, K3_ϕ, K4_h, K4_ϕ, dt, set_h_bc, h_bc)
 
         # check convergence criterion
         if (it % nout == 0) && do_monit
@@ -178,7 +185,7 @@ end
 end
 
 do_monit = true
-h, ϕ, t_sol = simple_sheet(; do_monit=do_monit, set_h_bc=false, e_v_num=0)
+h, ϕ, t_sol = simple_sheet(; do_monit=do_monit, set_h_bc=true, e_v_num=0)
 @show t_sol
 
 if !do_monit
