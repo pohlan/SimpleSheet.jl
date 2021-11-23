@@ -3,9 +3,10 @@
 # TODO:
 # - try on the GPU
 
-using Printf, LinearAlgebra, Statistics, Plots, Test, RecursiveArrayTools, OrdinaryDiffEq,
+using Printf, LinearAlgebra, Statistics, Test, RecursiveArrayTools, OrdinaryDiffEq,
     Infiltrator
-pyplot()
+import Plots; Plt=Plots
+Plt.pyplot()
 
 @views   inn(A) = A[2:end-1,2:end-1]
 @views av_xa(A) = (0.5  .* (A[1:end-1,:] .+ A[2:end,:]))
@@ -161,16 +162,16 @@ function simple_sheet(; nx, ny, ttot, set_h_bc, e_v_num, do_plots=false)
     nit  = length(sol.t)-1
 
     if do_plots
-        display(plot(heatmap(inn(hend')),
-                     heatmap(inn(ϕend'))))
+        Plt.display(Plt.plot(Plt.heatmap(inn(hend')),
+                     Plt.heatmap(inn(ϕend'))))
 
-        display(plot(plot(ϕend[2:end-1,end÷2]/1e6, xlabel="x (gridpoints)", ylabel="ϕ (MPa)"),
-                     plot(ϕend[2:end-1,end÷2]/scales.ϕ_, xlabel="x (gridpoints)", ylabel="ϕ ()"),
-                     plot(hend[2:end-1,end÷2], xlabel="x (gridpoints)", ylabel="h (m)"),
-                     plot(hend[2:end-1,end÷2]/scales.h_, xlabel="x (gridpoints)", ylabel="h ()"),
+        Plt.display(Plt.plot(Plt.plot(ϕend[2:end-1,end÷2]/1e6, xlabel="x (gridpoints)", ylabel="ϕ (MPa)"),
+                     Plt.plot(ϕend[2:end-1,end÷2]/scales.ϕ_, xlabel="x (gridpoints)", ylabel="ϕ ()"),
+                     Plt.plot(hend[2:end-1,end÷2], xlabel="x (gridpoints)", ylabel="h (m)"),
+                     Plt.plot(hend[2:end-1,end÷2]/scales.h_, xlabel="x (gridpoints)", ylabel="h ()"),
                      layout=(2,2), reuse=false))
 
-        display(plot(sol.t*scales.t_/day, diff(sol.t*scales.t_), reuse=false, xlabel="t (day)", ylabel="timestep (s)"))#, yscale=:log10))
+        Plt.display(Plt.plot(sol.t*scales.t_/day, diff(sol.t*scales.t_), reuse=false, xlabel="t (day)", ylabel="timestep (s)"))#, yscale=:log10))
     end
 
     return ϕ, h, nit, toc

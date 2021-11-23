@@ -1,4 +1,5 @@
-using Printf, LinearAlgebra, Statistics, Plots
+using Printf, LinearAlgebra, Statistics, Infiltrator
+import Plots; Plt = Plots
 
 @views   inn(A) = A[2:end-1,2:end-1]
 @views av_xa(A) = (0.5  .* (A[1:end-1,:] .+ A[2:end,:]))
@@ -10,24 +11,25 @@ using Printf, LinearAlgebra, Statistics, Plots
 const small = eps(Float64)
 const day   = 24*3600
 
-@views function simple_sheet(; do_monit=true,   # enable/disable plotting of intermediate results
-                               set_h_bc=false,  # whether to set dirichlet bc for h (at the nodes where ϕ d. bc are set)
-                                                # note: false is only applied if e_v_num = 0, otherwise bc are required
-                               e_v_num=0,       # regularisation void ratio
-                               use_CFL=false,   # true: use CFL criterion for dt, false: use fixed dt=1s
-                               CN=0             # Crank-Nicolson (CN=0.5), Forward Euler (CN=0)
-                               )
+@views function simple_sheet(;  nx, ny,          # grid size
+                                ttot,            # time in s for the model to simulate
+                                do_monit=false,  # enable/disable plotting of intermediate results
+                                set_h_bc=false,  # whether to set dirichlet bc for h (at the nodes where ϕ d. bc are set)
+                                                 # note: false is only applied if e_v_num = 0, otherwise bc are required
+                                e_v_num=0,       # regularisation void ratio
+                                use_CFL=false,   # true: use CFL criterion for dt, false: use fixed dt=1s
+                                CN=0             # Crank-Nicolson (CN=0.5), Forward Euler (CN=0)
+                                )
+
     # physics
     Lx, Ly = 100e3, 20e3                  # length/width of the domain, starts at (0, 0)
     dt     = 1.0                          # physical time step
-    ttot   = 1day
     α      = 1.25
     β      = 1.5
     m      = 7.93e-11                           # source term for SHMIP A1 test case
     e_v    = 1.                                 # void ratio for englacial storage
 
     # numerics
-    nx, ny = 64, 32
     nout   = 1e4
     if (e_v_num > 0.) set_h_bc=true end
 
@@ -161,23 +163,14 @@ const day   = 24*3600
         # check convergence criterion
         if (it % nout == 0) && do_monit
             # visu
-            p1 = plot(ϕ[2:end-1,end÷2])
-            p2 = plot(h[2:end-1,end÷2])
-            display(plot(p1, p2))
+            p1 = Plt.plot(ϕ[2:end-1,end÷2])
+            p2 = Plt.plot(h[2:end-1,end÷2])
+            Plt.display(Plt.plot(p1, p2))
             @printf("it %d, dt = %1.3e s, t = %1.3f day \n", it, dt*t_, t*t_/day)
         end
 
     end
-    return h, ϕ, t_sol, it
+    return ϕ, h, it, t_sol
 end
 
-do_monit = true
-h, ϕ, t_sol, it = simple_sheet(; do_monit=do_monit, set_h_bc=true, use_CFL=false, e_v_num=1e-1, CN=0.5)
-@show t_sol
-
-if !do_monit
-    # visu
-    p1 = heatmap(inn(ϕ)')
-    p2 = heatmap(inn(h)')
-    display(plot(p1, p2))
-end
+# h, ϕ, t_sol, it = simple_sheet(; nx=64, ny=32, ttot=1day, do_monit=true, set_h_bc=true, use_CFL=false, e_v_num=1e-1, CN=0.5)
