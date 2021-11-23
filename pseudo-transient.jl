@@ -181,8 +181,8 @@ const day   = 24*3600
 
         # errors
         if update_h_only || iter % 1000 == 0
-            err_h = norm(Res_h) / length(Res_h)
-            err_ϕ = norm(Res_ϕ) / length(Res_ϕ)
+            err_h = norm(Res_h) / sqrt(length(Res_h))
+            err_ϕ = norm(Res_ϕ) / sqrt(length(Res_ϕ))
             @printf("it %d, err_h = %1.2e, err_ϕ = %1.2e \n", iter, err_h, err_ϕ)
 
             push!(iters, iter)
