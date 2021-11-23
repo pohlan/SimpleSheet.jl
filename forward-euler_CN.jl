@@ -12,7 +12,7 @@ const small = eps(Float64)
 const day   = 24*3600
 
 @views function simple_sheet(;  nx, ny,          # grid size
-                                ttot,            # time in s for the model to simulate
+                                itMax=1e5,       # maximal number of iterations
                                 do_monit=false,  # enable/disable plotting of intermediate results
                                 set_h_bc=false,  # whether to set dirichlet bc for h (at the nodes where ϕ d. bc are set)
                                                  # note: false is only applied if e_v_num = 0, otherwise bc are required
@@ -24,10 +24,11 @@ const day   = 24*3600
     # physics
     Lx, Ly = 100e3, 20e3                  # length/width of the domain, starts at (0, 0)
     dt     = 1.0                          # physical time step
+    ttot   = 1e9
     α      = 1.25
     β      = 1.5
-    m      = 7.93e-11                           # source term for SHMIP A1 test case
-    e_v    = 1.                                 # void ratio for englacial storage
+    m      = 7.93e-11                     # source term for SHMIP A1 test case
+    e_v    = 1e-6                         # void ratio for englacial storage
 
     # numerics
     nout   = 1e4
@@ -102,7 +103,7 @@ const day   = 24*3600
 
     # Time loop
     if !use_CFL println("Running nt = $nt time steps (dt = $(dt*t_) sec.)") end
-    t_sol=@elapsed while t<ttot
+    t_sol=@elapsed while t<ttot && it<itMax
 
         h .= max.(h, 0.0)
 
@@ -170,7 +171,7 @@ const day   = 24*3600
         end
 
     end
-    return ϕ, h, it, t_sol
+    return ϕ .* ϕ_, h .* h_, it, t_sol
 end
 
-# h, ϕ, t_sol, it = simple_sheet(; nx=64, ny=32, ttot=1day, do_monit=true, set_h_bc=true, use_CFL=false, e_v_num=1e-1, CN=0.5)
+# h, ϕ, t_sol, it = simple_sheet(; nx=64, ny=32, ttot=1day, itMax=5*1e4,do_monit=true, set_h_bc=true, use_CFL=false, e_v_num=1e-1, CN=0.5)

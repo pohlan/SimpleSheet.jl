@@ -68,22 +68,23 @@ end
     return
 end
 
-@views function simple_sheet(;  do_monit=true,  # enable/disable plotting of intermediate results
-                                set_h_bc=false) # whether to set dirichlet bc for h (at the nodes where ϕ d. bc are set)
+@views function simple_sheet(;  nx, ny,          # grid size
+                                itMax,           # maximal number of iterations
+                                do_monit=true,   # enable/disable plotting of intermediate results
+                                set_h_bc=false)  # whether to set dirichlet bc for h (at the nodes where ϕ d. bc are set)
     # physics
     Lx, Ly = 100e3, 20e3                        # length/width of the domain, starts at (0, 0)
-    dt     = 0.01day                            # physical time step
-    ttot   = 100day
+    dt     = 0.1                           # physical time step
+    ttot   = 1e9
     α      = 1.25
     β      = 1.5
     m      = 7.93e-11                           # source term for SHMIP A1 test case
-    e_v    = 1e1                                # void ratio for englacial storage
+    e_v    = 1e-3                               # void ratio for englacial storage
 
     # numerics
-    nx, ny = 64, 32
-    nout   = 1e3
+    nout   = 10
     # derived
-    nt     = Int(ttot ÷ dt)
+    nt     = min(Int(ttot ÷ dt), itMax)
     dx, dy = Lx / (nx-3), Ly / (ny-3)           # the outermost points are ghost points
     xc, yc = LinRange(-dx, Lx+dx, nx), LinRange(-dy, Ly+dy, ny)
 
@@ -118,6 +119,7 @@ end
     dx     = dx / x_
     dy     = dy / x_
     dt     = dt / t_
+    ttot   = ttot / t_
     H      = H ./ H_
 
     h_bc     = (Γ/Σ * (0.91 .* H[2,2] - ϕ0[2,2]).^3 .+ 1.).^(-1)   # solution for h if dhdt=0 (Σ vo = Γ vc)
@@ -152,16 +154,18 @@ end
 
     Err1 = zeros(nx  ,ny  )
     Err2 = zeros(nx  ,ny  )
+    ittot    = 0
+    it_outer = 0
     # Time loop
-    println("Running nt = $nt time steps (dt = $(dt*t_) sec.)")
-    t_sol=@elapsed for it = 1:nt
+    println("Running $nt iterations")
+    t_sol=@elapsed while ittot < nt
 
         # timestep
         # dt = min(dx,dy)^2 ./ maximum(d_eff) ./ 4.1
         h_o .= h
         ϕ_o .= ϕ
 
-        err = 1.0; epsi = 1e-5; iter = 1
+        err = 1.0; epsi = 1e-5; iter = 0
         while err > epsi && iter < 1e1
             Err1 .= ϕ
             Err2 .= h
@@ -181,28 +185,23 @@ end
             Err2 .= abs.(Err2 .- h)
             err   = max(maximum(Err1), maximum(Err2))
             # if (iter % 100 == 0) @printf("iter = %d, err = %1.3e \n", iter, err) end
-            iter += 1
+            iter  += 1
+            ittot += 1
         end
+
+        it_outer += 1
+
         # check convergence criterion
-        if (it % nout == 0) && do_monit
+        if (it_outer % nout == 0) && do_monit
             # @show dtp = min(dx,dy)^2 ./ maximum(d_eff) ./ 4.1
             # visu
             p1 = plot(ϕ[2:end-1,end÷2])
             p2 = plot(h[2:end-1,end÷2])
             display(plot(p1, p2))
-            @printf("it %d (dt = %1.3e), max(ϕ) = %1.3f, max(h) = %1.3f (iter = %d) \n", it, dt, maximum(inn(ϕ)), maximum(inn(h)), iter)
+            @printf("it %d, dt = %1.2e, max(ϕ) = %1.3f, max(h) = %1.3f (iter = %d) \n", ittot, dt .* t_, maximum(inn(ϕ)), maximum(inn(h)), iter)
         end
     end
-    return h, ϕ, h_, ϕ_, t_sol
+    return ϕ .* ϕ_, h .* h_, ittot, t_sol
 end
 
-do_monit = true
-h, ϕ, h_, ϕ_, t_sol = simple_sheet(; do_monit=do_monit, set_h_bc=true)
-@show t_sol
-
-if !do_monit
-    # visu
-    p1 = plot(ϕ[2:end-1,end÷2])
-    p2 = plot(h[2:end-1,end÷2])
-    display(plot(p1, p2))
-end
+# ϕ, h, ittot, t_sol = simple_sheet(; nx=64, ny=32, itMax=2*10^3, do_monit=true, set_h_bc=false)

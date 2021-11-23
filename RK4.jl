@@ -67,25 +67,26 @@ end
     return
 end
 
-@views function simple_sheet(;  do_monit=true,   # enable/disable plotting of intermediate results
+@views function simple_sheet(;  nx, ny,          # grid size
+                                itMax,           # maximal number of iterations
+                                do_monit=true,   # enable/disable plotting of intermediate results
                                 set_h_bc=false,  # whether to set dirichlet bc for h (at the nodes where ϕ d. bc are set)
                                                  # note: false is only applied if e_v_num = 0, otherwise bc are required
-                                e_v_num=0,       # regularisation void ratio
+                                e_v_num=0        # regularisation void ratio
     )
 
     # physics
     Lx, Ly = 100e3, 20e3                  # length/width of the domain, starts at (0, 0)
-    dt     = 1.0                          # physical time step
-    ttot   = 1day
+    dt     = 1.                           # physical time step
+    ttot   = 1e9
     α      = 1.25
     β      = 1.5
     m      = 7.93e-11                           # source term for SHMIP A1 test case
-    e_v    = 1e-3                               # void ratio for englacial storage
+    e_v    = 1e-6                               # void ratio for englacial storage
 
     # numerics
-    nx, ny = 64, 32
     nout   = 1e3
-    nt     = Int(ttot ÷ dt)
+    nt     = min(Int(ttot ÷ dt), itMax)
     dx, dy = Lx / (nx-3), Ly / (ny-3)     # the outermost points are ghost points
     xc, yc = LinRange(-dx, Lx+dx, nx), LinRange(-dy, Ly+dy, ny)
     if (e_v_num > 0.) set_h_bc=true end
@@ -153,7 +154,7 @@ end
     h = copy(h0)
 
     # Time loop
-    println("Running nt = $nt time steps (dt = $(dt*t_) sec.)")
+    println("Running $nt iterations")
     t_sol=@elapsed for it = 1:nt
 
         # timestep
@@ -181,16 +182,7 @@ end
             @printf("it %d (dt = %1.3e), max(h) = %1.3f \n", it, dt, maximum(inn(h)))
         end
     end
-    return h, ϕ, t_sol
+    return ϕ .* ϕ_, h .* h_, nt, t_sol
 end
 
-do_monit = true
-h, ϕ, t_sol = simple_sheet(; do_monit=do_monit, set_h_bc=true, e_v_num=0)
-@show t_sol
-
-if !do_monit
-    # visu
-    p1 = plot(ϕ[2:end-1,end÷2])
-    p2 = plot(h[2:end-1,end÷2])
-    display(plot(p1, p2))
-end
+# ϕ, h, nt, t_sol = simple_sheet(; nx=64, ny=32, itMax=10^4, do_monit=true, set_h_bc=false, e_v_num=0.1)

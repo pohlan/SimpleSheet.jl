@@ -10,12 +10,17 @@ using Printf, LinearAlgebra, Statistics, Plots
 const small = eps(Float64)
 const day   = 24*3600
 
-@views function simple_sheet(;  do_monit=true,          # enable/disable plotting of intermediate results
+@views function simple_sheet(;  nx, ny,                 # grid size
+                                itMax,                  # maximal number of iterations
+                                γ,                      # damping parameter (γ_h = γ_ϕ)
+                                dτ_h_,                  # pseudo-time step for h
+                                do_monit=false,         # enable/disable plotting of intermediate results
                                 set_h_bc=false,         # whether to set dirichlet bc for h (at the nodes where ϕ d. bc are set)
                                                         # note: false is only applied if e_v_num = 0, otherwise bc are required
                                 e_v_num=0,              # regularisation void ratio
-                                update_h_only=true      # true: split step scheme, only update h in the beginning
+                                update_h_only=false     # true: split step scheme, only update h in the beginning
                                 )
+
     # physics
     Lx, Ly = 100e3, 20e3                  # length/width of the domain, starts at (0, 0)
     dt     = 1e9                          # physical time step
@@ -23,14 +28,12 @@ const day   = 24*3600
     α      = 1.25
     β      = 1.5
     m      = 7.93e-11                           # source term for SHMIP A1 test case
-    e_v    = 0.                                  # void ratio for englacial storage
+    e_v    = 1e-6                                  # void ratio for englacial storage
 
     # numerics
-    nx, ny = 64, 32
     nout   = 1000
-    itMax  = 2*10^4
-    γ_h    = 0.8          # the third digit can help for saving ~2e3 iterations
-    γ_ϕ    = 0.8
+    γ_h    = γ
+    γ_ϕ    = γ
     tol    = 1e-6
     if (e_v_num > 0.) set_h_bc=true end
 
@@ -116,7 +119,7 @@ const day   = 24*3600
         if  err_h > 1e-3 && update_h_only # once update_h_only = false it cannot go back
             dτ_h = 1e-3
         else
-            dτ_h = 2e-5                 # optimising it to the 1e-7 digit can save a few thousand iterations
+            dτ_h = dτ_h_
             update_h_only = false
         end
 
@@ -189,25 +192,21 @@ const day   = 24*3600
 
         # plot
         if (iter % nout == 0) && do_monit
-            # visu
-            p1 = heatmap(inn(ϕ .* ϕ_)')
-            p2 = heatmap(inn(h .* h_)')
-            p3 = plot(ϕ[2:end-1, end÷2] .* ϕ_, label="ϕ")
-            p4 = plot(h[2:end-1, end÷2] .* h_, label="h")
-            p5 = plot(abs.(Res_ϕ[:, end÷2]), label="abs(Res_ϕ)")
-            p6 = plot(abs.(Res_h[:, end÷2]), label="abs(Res_h)")
-            display(plot(p1, p3, p5, p2, p4, p6))
+            p1 = plot(ϕ[2:end-1, end÷2], label="ϕ", xlabel="x", title="ϕ cross-sec.")
+            p2 = plot(h[2:end-1, end÷2], label="h", xlabel="x", title="h cross-sec.")
+            p3 = plot(abs.(Res_ϕ[:, end÷2]), label="abs(Res_ϕ)", xlabel="x", title="res cross-sec.")
+            p4 = plot(abs.(Res_h[:, end÷2]), label="abs(Res_h)", xlabel="x", title="res cross-sec.")
+            if max(err_ϕ, err_h) > tol && iter<itMax
+                display(plot(p1, p3, p2, p4))
+            else
+                p5 = plot(iters, errs_ϕ, xlabel="# iterations", title="residual error", label="err_ϕ", yscale=:log10)
+                p6 = plot(iters, errs_h, xlabel="# iterations", title="residual error", label="err_h", yscale=:log10)
+                display(plot(p1, p3, p5, p2, p4, p6))
+            end
         end
     end
+
     return h * h_, ϕ * ϕ_, Res_ϕ, Res_h, iters, errs_h, errs_ϕ
 end
 
-h, ϕ, Res_ϕ, Res_h, iters, errs_h, errs_ϕ = simple_sheet(; do_monit=true, update_h_only=false, e_v_num=0, set_h_bc=false)
-
-p1 = plot(ϕ[2:end-1, end÷2], label="ϕ", xlabel="x", title="ϕ cross-sec.")
-p2 = plot(h[2:end-1, end÷2], label="h", xlabel="x", title="h cross-sec.")
-p3 = plot(iters, errs_ϕ, xlabel="# iterations", title="residual error", label="err_ϕ", yscale=:log10)
-p4 = plot(iters, errs_h, xlabel="# iterations", title="residual error", label="err_h", yscale=:log10)
-p5 = plot(abs.(Res_ϕ[:, end÷2]), label="abs(Res_ϕ)", xlabel="x", title="res cross-sec.")
-p6 = plot(abs.(Res_h[:, end÷2]), label="abs(Res_h)", xlabel="x", title="res cross-sec.")
-display(plot(p1, p3, p5, p2, p4, p6))
+# h, ϕ, Res_ϕ, Res_h, iters, errs_h, errs_ϕ = simple_sheet(; nx=64, ny=23, γ=0.8, dτ_h_=1e-5, itMax=2*10^4, do_monit=true, update_h_only=false, e_v_num=1e-1, set_h_bc=true)

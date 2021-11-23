@@ -27,7 +27,7 @@ function make_ode_reg(; nx, ny,                 # grid size
     α      = 1.25
     β      = 1.5
     m      = 7.93e-11                           # source term for SHMIP A1 test case
-    e_v    = 1e-3                               # void ratio for englacial storage
+    e_v    = 0.                                 # void ratio for englacial storage
 
     # numerics
     dx, dy = Lx / (nx-3), Ly / (ny-3)     # the outermost points are ghost points
@@ -132,9 +132,9 @@ function make_ode_reg(; nx, ny,                 # grid size
     return ode!, copy(ϕ0), copy(h0), (;ϕ_, h_, x_, q_, t_, H_, Σ, Γ, Λ), H
 end
 
-function simple_sheet(; nx, ny, ttot, set_h_bc, e_v_num, do_plots=false)
+function simple_sheet(; nx, ny, itMax, set_h_bc, e_v_num, do_plots=false)
     ode!, ϕ0, h0, scales, H = make_ode_reg(; nx, ny, set_h_bc, e_v_num)
-    tspan = (0, ttot / scales.t_)
+    tspan = (0, 1e9 / scales.t_)
     u0 = ArrayPartition(h0, ϕ0)
     du0 = ArrayPartition(copy(h0), copy(ϕ0))
 
@@ -154,12 +154,11 @@ function simple_sheet(; nx, ny, ttot, set_h_bc, e_v_num, do_plots=false)
     # - 10s for tol=1e-7 (but solution is a bit unstable)
     # Note that about tol 1e-8 is needed to get a stable, non-oscillatory solution
     tic = Base.time()
-    sol = solve(prob, ROCK4(), reltol=1e-8, abstol=1e-8, isoutofdomain=(u,p,t) -> any(u.x[1].<0)); #, dtmax=150/scales.t_) #, save_on=false) #, isoutofdomain=(u,p,t) -> any(u.x[1]<0));
+    sol = solve(prob, ROCK4(), reltol=1e-8, maxiters=itMax, save_everystep=true, abstol=1e-8, isoutofdomain=(u,p,t) -> any(u.x[1].<0)); #, dtmax=150/scales.t_) #, save_on=false) #, isoutofdomain=(u,p,t) -> any(u.x[1]<0));
     toc = Base.time() - tic
 
     h = sol.u[end].x[1]*scales.h_;
-    ϕ = sol.u[end].x[2]*scales.ϕ_;
-    nit  = length(sol.t)-1
+    ϕ = sol.u[end].x[2]*scales.ϕ_;1
 
     if do_plots
         Plt.display(Plt.plot(Plt.heatmap(inn(hend')),
@@ -174,7 +173,7 @@ function simple_sheet(; nx, ny, ttot, set_h_bc, e_v_num, do_plots=false)
         Plt.display(Plt.plot(sol.t*scales.t_/day, diff(sol.t*scales.t_), reuse=false, xlabel="t (day)", ylabel="timestep (s)"))#, yscale=:log10))
     end
 
-    return ϕ, h, nit, toc
+    return ϕ, h, itMax, toc
 end
 
-# ϕ, h, nit, toc = simple_sheet(nx=64, ny=32, ttot=1e4, set_h_bc=true, e_v_num=1e-1)
+ ϕ, h, itMax, toc = simple_sheet(nx=64, ny=32, itMax=80, set_h_bc=true, e_v_num=1e-1)
