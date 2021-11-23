@@ -29,7 +29,7 @@ const day   = 24*3600
     α      = 1.25
     β      = 1.5
     m      = 7.93e-11                           # source term for SHMIP A1 test case
-    e_v    = 1e-6                                  # void ratio for englacial storage
+    e_v    = 1e-6                               # void ratio for englacial storage
 
     # numerics
     nout   = 1000
