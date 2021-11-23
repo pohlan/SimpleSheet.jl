@@ -116,7 +116,7 @@ const day   = 24*3600
     t_sol = @elapsed while iter<itMax # && max(err_ϕ, err_h) > tol
         h .= max.(h, 0.0)
 
-        if  err_h > 1e-3 && update_h_only # once update_h_only = false it cannot go back
+        if  iter < 100 && update_h_only # once update_h_only = false it cannot go back
             dτ_h = 1e-3
         else
             dτ_h = dτ_h_
