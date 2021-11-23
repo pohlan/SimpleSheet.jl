@@ -1,4 +1,5 @@
-using Printf, LinearAlgebra, Statistics, Plots
+using Printf, LinearAlgebra, Statistics
+import Plots; Plt = Plots
 
 @views   inn(A) = A[2:end-1,2:end-1]
 @views av_xa(A) = (0.5  .* (A[1:end-1,:] .+ A[2:end,:]))
@@ -72,7 +73,7 @@ end
 @views function simple_sheet(;  nx, ny,          # grid size
                                 itMax,           # maximal number of iterations
                                 dt,              # physical time step, fixed
-                                do_monit=true,   # enable/disable plotting of intermediate results
+                                do_monit=false,   # enable/disable plotting of intermediate results
                                 set_h_bc=false,  # whether to set dirichlet bc for h (at the nodes where ϕ d. bc are set)
                                 e_v_num=0)       # regularisation void ratio
     # physics
@@ -198,9 +199,9 @@ end
         if (it_outer % nout == 0) && do_monit
             # @show dtp = min(dx,dy)^2 ./ maximum(d_eff) ./ 4.1
             # visu
-            p1 = plot(ϕ[2:end-1,end÷2])
-            p2 = plot(h[2:end-1,end÷2])
-            display(plot(p1, p2))
+            p1 = Plt.plot(ϕ[2:end-1,end÷2])
+            p2 = Plt.plot(h[2:end-1,end÷2])
+            Plt.display(Plt.plot(p1, p2))
             @printf("it %d, dt = %1.2e, max(ϕ) = %1.3f, max(h) = %1.3f (iter = %d) \n", ittot, dt .* t_, maximum(inn(ϕ)), maximum(inn(h)), iter)
         end
     end

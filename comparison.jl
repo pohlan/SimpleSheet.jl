@@ -36,6 +36,7 @@ test_sets = Dict("diffeq_explicit"  => [(set_h_bc=false, e_v_num=0   ),
 
 itMaxs = [5e3, 1e4]
 df    = DataFrame(method=String[], kwargs=NamedTuple[], ϕ_test = Array[], h_test = Array[], rms_ϕ=Array{Float64}[], rms_h=Array{Float64}[], nit=Array{Int64}[], t_run=Array{Float64}[])
+tic = Base.time()
 for method in keys(test_sets)
     include(method * ".jl")
     i = 0
@@ -66,3 +67,18 @@ for method in keys(test_sets)
         push!(df, (;method, kwargs, ϕ_test, h_test, rms_ϕ, rms_h, nit, t_run))
     end
 end
+toc = Base.time() - tic
+print(toc)
+
+# basic plotting with Plots
+# all h and ϕ cross sections
+
+#Plt.plot(df.h_test)
+#Plt.plot!(h_ref, color="black", linewidth=2)
+#Plt.plot(df.ϕ_test)
+#Plt.plot!(ϕ_ref, color="black", linewidth=2)
+
+# rms against iterations
+
+#Plt.plot(df.nit, df.rms_h)
+#Plt.plot(df.nit, df.rms_ϕ)

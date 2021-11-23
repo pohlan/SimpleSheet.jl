@@ -1,4 +1,5 @@
-using Printf, LinearAlgebra, Statistics, Plots
+using Printf, LinearAlgebra, Statistics
+import Plots; Plt = Plots
 
 @views   inn(A) = A[2:end-1,2:end-1]
 @views av_xa(A) = (0.5  .* (A[1:end-1,:] .+ A[2:end,:]))
@@ -175,9 +176,9 @@ end
         if (it % nout == 0) && do_monit
             # @show dtp = min(dx,dy)^2 ./ maximum(d_eff) ./ 4.1
             # visu
-            p1 = plot(ϕ[2:end-1,end÷2])
-            p2 = plot(h[2:end-1,end÷2])
-            display(plot(p1, p2))
+            p1 = Plt.plot(ϕ[2:end-1,end÷2])
+            p2 = Plt.plot(h[2:end-1,end÷2])
+            Plt.display(Plt.plot(p1, p2))
             @printf("it %d (dt = %1.3e), max(h) = %1.3f \n", it, dt, maximum(inn(h)))
         end
     end

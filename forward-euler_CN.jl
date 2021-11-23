@@ -174,5 +174,4 @@ const day   = 24*3600
     return ϕ .* ϕ_, h .* h_, it, t_sol
 end
 
- ϕ, h, it, t_sol = simple_sheet(; nx=64, ny=32, itMax=10^5, dt=10, do_monit=false, set_h_bc=true, use_CFL=false, e_v_num=1e-1, CN=0.5)
-print(t_sol)
+# ϕ, h, it, t_sol = simple_sheet(; nx=64, ny=32, itMax=10^5, dt=10, do_monit=false, set_h_bc=true, use_CFL=false, e_v_num=1e-1, CN=0.5)

@@ -1,4 +1,5 @@
-using Printf, LinearAlgebra, Statistics, Plots
+using Printf, LinearAlgebra, Statistics
+import Plots; Plt = Plots
 
 @views   inn(A) = A[2:end-1,2:end-1]
 @views av_xa(A) = (0.5  .* (A[1:end-1,:] .+ A[2:end,:]))
@@ -192,16 +193,16 @@ const day   = 24*3600
 
         # plot
         if (iter % nout == 0 || update_h_only) && do_monit
-            p1 = plot(ϕ[2:end-1, end÷2], label="ϕ", xlabel="x", title="ϕ cross-sec.")
-            p2 = plot(h[2:end-1, end÷2], label="h", xlabel="x", title="h cross-sec.")
-            p3 = plot(abs.(Res_ϕ[:, end÷2]), label="abs(Res_ϕ)", xlabel="x", title="res cross-sec.")
-            p4 = plot(abs.(Res_h[:, end÷2]), label="abs(Res_h)", xlabel="x", title="res cross-sec.")
+            p1 = Plt.plot(ϕ[2:end-1, end÷2], label="ϕ", xlabel="x", title="ϕ cross-sec.")
+            p2 = Plt.plot(h[2:end-1, end÷2], label="h", xlabel="x", title="h cross-sec.")
+            p3 = Plt.plot(abs.(Res_ϕ[:, end÷2]), label="abs(Res_ϕ)", xlabel="x", title="res cross-sec.")
+            p4 = Plt.plot(abs.(Res_h[:, end÷2]), label="abs(Res_h)", xlabel="x", title="res cross-sec.")
             if max(err_ϕ, err_h) > tol && iter<itMax
-                display(plot(p1, p3, p2, p4))
+                Plt.display(Plt.plot(p1, p3, p2, p4))
             else
-                p5 = plot(iters, errs_ϕ, xlabel="# iterations", title="residual error", label="err_ϕ", yscale=:log10)
-                p6 = plot(iters, errs_h, xlabel="# iterations", title="residual error", label="err_h", yscale=:log10)
-                display(plot(p1, p3, p5, p2, p4, p6))
+                p5 = Plt.plot(iters, errs_ϕ, xlabel="# iterations", title="residual error", label="err_ϕ", yscale=:log10)
+                p6 = Plt.plot(iters, errs_h, xlabel="# iterations", title="residual error", label="err_h", yscale=:log10)
+                Plt.display(Plt.plot(p1, p3, p5, p2, p4, p6))
             end
         end
     end
@@ -209,4 +210,4 @@ const day   = 24*3600
     return ϕ * ϕ_, h * h_, iter, t_sol
 end
 
-# ϕ, h, iter, t_sol = simple_sheet(; nx=64, ny=32, set_h_bc=false, e_v_num=0, update_h_only=false,  γ=0.91, dτ_h_=7.3e-6, itMax=10^4, do_monit=true)
+# ϕ, h, iter, t_sol = simple_sheet(; nx=64, ny=32, set_h_bc=true, e_v_num=1e-1, update_h_only=false,  γ=0.91, dτ_h_=1e-6, itMax=10^4, do_monit=true)
