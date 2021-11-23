@@ -113,7 +113,7 @@ const day   = 24*3600
     iter  = 0.
 
     # PT iteration loop
-    while max(err_ϕ, err_h) > tol && iter<itMax
+    t_sol = @elapsed while iter<itMax # && max(err_ϕ, err_h) > tol
         h .= max.(h, 0.0)
 
         if  err_h > 1e-3 && update_h_only # once update_h_only = false it cannot go back
@@ -191,7 +191,7 @@ const day   = 24*3600
         end
 
         # plot
-        if (iter % nout == 0) && do_monit
+        if (iter % nout == 0 || update_h_only) && do_monit
             p1 = plot(ϕ[2:end-1, end÷2], label="ϕ", xlabel="x", title="ϕ cross-sec.")
             p2 = plot(h[2:end-1, end÷2], label="h", xlabel="x", title="h cross-sec.")
             p3 = plot(abs.(Res_ϕ[:, end÷2]), label="abs(Res_ϕ)", xlabel="x", title="res cross-sec.")
@@ -206,7 +206,7 @@ const day   = 24*3600
         end
     end
 
-    return h * h_, ϕ * ϕ_, Res_ϕ, Res_h, iters, errs_h, errs_ϕ
+    return ϕ * ϕ_, h * h_, iter, t_sol
 end
 
-# h, ϕ, Res_ϕ, Res_h, iters, errs_h, errs_ϕ = simple_sheet(; nx=64, ny=23, γ=0.8, dτ_h_=1e-5, itMax=2*10^4, do_monit=true, update_h_only=false, e_v_num=1e-1, set_h_bc=true)
+# ϕ, h, iter, t_sol = simple_sheet(; nx=64, ny=32, set_h_bc=false, e_v_num=0, update_h_only=false,  γ=0.91, dτ_h_=7.3e-6, itMax=10^4, do_monit=true)

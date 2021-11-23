@@ -69,6 +69,7 @@ end
 
 @views function simple_sheet(;  nx, ny,          # grid size
                                 itMax,           # maximal number of iterations
+                                dt=1e-3,         # physical time step, fixed
                                 do_monit=true,   # enable/disable plotting of intermediate results
                                 set_h_bc=false,  # whether to set dirichlet bc for h (at the nodes where ϕ d. bc are set)
                                                  # note: false is only applied if e_v_num = 0, otherwise bc are required
@@ -77,7 +78,6 @@ end
 
     # physics
     Lx, Ly = 100e3, 20e3                  # length/width of the domain, starts at (0, 0)
-    dt     = 1.                           # physical time step
     ttot   = 1e9
     α      = 1.25
     β      = 1.5
@@ -85,7 +85,7 @@ end
     e_v    = 1e-6                               # void ratio for englacial storage
 
     # numerics
-    nout   = 1e3
+    nout   = 1000
     nt     = min(Int(ttot ÷ dt), itMax)
     dx, dy = Lx / (nx-3), Ly / (ny-3)     # the outermost points are ghost points
     xc, yc = LinRange(-dx, Lx+dx, nx), LinRange(-dy, Ly+dy, ny)
@@ -172,7 +172,6 @@ end
         compute_resid(K4_h, K4_ϕ, Tmp_h, Tmp_ϕ, dϕ_dx, dϕ_dy, gradϕ, d_eff, flux_x, flux_y, div_q, vo, vc, α, small, β, H, Σ, Γ, Λ, e_v, e_v_num, dx, dy, set_h_bc, h_bc)
         update_RK4!(h, ϕ, K1_h, K1_ϕ, K2_h, K2_ϕ, K3_h, K3_ϕ, K4_h, K4_ϕ, dt, set_h_bc, h_bc)
 
-        # check convergence criterion
         if (it % nout == 0) && do_monit
             # @show dtp = min(dx,dy)^2 ./ maximum(d_eff) ./ 4.1
             # visu
@@ -185,4 +184,4 @@ end
     return ϕ .* ϕ_, h .* h_, nt, t_sol
 end
 
-# ϕ, h, nt, t_sol = simple_sheet(; nx=64, ny=32, itMax=10^4, do_monit=true, set_h_bc=false, e_v_num=0.1)
+# ϕ, h, nt, t_sol = simple_sheet(; nx=64, ny=32, itMax=10^5, do_monit=true, set_h_bc=true, e_v_num=0.1, dt=10)

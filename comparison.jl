@@ -21,14 +21,15 @@ test_sets = Dict("diffeq_explicit"  => [(set_h_bc=false, e_v_num=0   ),
                                         #(set_h_bc=true,  e_v_num=1e-1, CN=0  , dt=10),
                                         (set_h_bc=true,  e_v_num=1e-1, CN=0.5, dt=10  )],
 
-                "pseudo-transient"  => [(set_h_bc=false, e_v_num=0,    update_h_only=false, γ=0.8, dτ_h_=1e-5),
-                                        (set_h_bc=false, e_v_num=0,    update_h_only=true,  γ=0.8, dτ_h_=1e-5),
-                                        (set_h_bc=true,  e_v_num=0,    update_h_only=false, γ=0.8, dτ_h_=1e-5),
-                                        (set_h_bc=true,  e_v_num=1e-1, update_h_only=false, γ=0.8, dτ_h_=1e-5)],
+                "pseudo-transient"  => [(set_h_bc=false, e_v_num=0,    update_h_only=false, γ=0.91, dτ_h_=7.3e-6),
+                                        (set_h_bc=false, e_v_num=0,    update_h_only=true,  γ=0.91, dτ_h_=1.9e-5),
+                                        (set_h_bc=true,  e_v_num=0,    update_h_only=false, γ=0.91, dτ_h_=7.2e-6),
+                                        (set_h_bc=true,  e_v_num=1e-1, update_h_only=false, γ=0.91, dτ_h_=1.1e-5),
+                                        (set_h_bc=true,  e_v_num=1e-1, update_h_only=true,  γ=0.91, dτ_h_=2.5e-5)],
 
-                "RK4"               => [(set_h_bc=false, e_v_num=0.),
-                                        #(set_h_bc=true,  e_v_num=0 ),
-                                        (set_h_bc=true,  e_v_num=0.1)],
+                "RK4"               => [(set_h_bc=false, e_v_num=0., dt=1e-3),
+                                        #(set_h_bc=true,  e_v_num=0, dt=1e-3),
+                                        (set_h_bc=true,  e_v_num=0.1, dt=10)],
 
                 "RK4_piccard_loop"  => [(set_h_bc=false, e_v_num=0, dt=1e-3)]
 )
