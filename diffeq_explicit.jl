@@ -16,6 +16,7 @@ Plt.pyplot()
 @views    av(A) = (0.25 .* (A[1:end-1,1:end-1] .+ A[1:end-1,2:end] .+ A[2:end,2:end] .+ A[2:end,1:end-1]))
 
 const small    = eps(Float64)
+const day      = 3600*24
 
 function make_ode_reg(; nx, ny,                 # grid size
                         set_h_bc=false,         # whether to set dirichlet bc for h (at the nodes where ϕ d. bc are set)
@@ -27,7 +28,7 @@ function make_ode_reg(; nx, ny,                 # grid size
     α      = 1.25
     β      = 1.5
     m      = 7.93e-11                           # source term for SHMIP A1 test case
-    e_v    = 0.                                 # void ratio for englacial storage
+    e_v    = 1e-6                                 # void ratio for englacial storage
 
     # numerics
     dx, dy = Lx / (nx-3), Ly / (ny-3)     # the outermost points are ghost points
@@ -161,13 +162,13 @@ function simple_sheet(; nx, ny, itMax, set_h_bc, e_v_num, do_plots=false)
     ϕ = sol.u[end].x[2]*scales.ϕ_;1
 
     if do_plots
-        Plt.display(Plt.plot(Plt.heatmap(inn(hend')),
-                     Plt.heatmap(inn(ϕend'))))
+        Plt.display(Plt.plot(Plt.heatmap(inn(h')),
+                     Plt.heatmap(inn(ϕ'))))
 
-        Plt.display(Plt.plot(Plt.plot(ϕend[2:end-1,end÷2]/1e6, xlabel="x (gridpoints)", ylabel="ϕ (MPa)"),
-                     Plt.plot(ϕend[2:end-1,end÷2]/scales.ϕ_, xlabel="x (gridpoints)", ylabel="ϕ ()"),
-                     Plt.plot(hend[2:end-1,end÷2], xlabel="x (gridpoints)", ylabel="h (m)"),
-                     Plt.plot(hend[2:end-1,end÷2]/scales.h_, xlabel="x (gridpoints)", ylabel="h ()"),
+        Plt.display(Plt.plot(Plt.plot(ϕ[2:end-1,end÷2]/1e6, xlabel="x (gridpoints)", ylabel="ϕ (MPa)"),
+                     Plt.plot(ϕ[2:end-1,end÷2]/scales.ϕ_, xlabel="x (gridpoints)", ylabel="ϕ ()"),
+                     Plt.plot(h[2:end-1,end÷2], xlabel="x (gridpoints)", ylabel="h (m)"),
+                     Plt.plot(h[2:end-1,end÷2]/scales.h_, xlabel="x (gridpoints)", ylabel="h ()"),
                      layout=(2,2), reuse=false))
 
         Plt.display(Plt.plot(sol.t*scales.t_/day, diff(sol.t*scales.t_), reuse=false, xlabel="t (day)", ylabel="timestep (s)"))#, yscale=:log10))
@@ -176,4 +177,4 @@ function simple_sheet(; nx, ny, itMax, set_h_bc, e_v_num, do_plots=false)
     return ϕ, h, itMax, toc
 end
 
- ϕ, h, itMax, toc = simple_sheet(nx=64, ny=32, itMax=80, set_h_bc=true, e_v_num=1e-1)
+# ϕ, h, itMax, toc = simple_sheet(nx=64, ny=32, itMax=80, set_h_bc=true, e_v_num=1e-1)

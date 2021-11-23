@@ -38,7 +38,7 @@ const day   = 24*3600
     vc     .=  h .* (0.91 .* H .- ϕ).^3
 
     Ki_h      .= Σ .* inn(vo) .- Γ .* inn(vc)
-    Ki_ϕ      .= (- div_q .- Ki_h .+ Λ) ./ max.(e_v .+ e_v_num, small)
+    Ki_ϕ      .= (- div_q .- Ki_h .+ Λ) ./ max(e_v + e_v_num, small)
     Ki_h     .+= e_v_num .* Ki_ϕ
 
     Ki_ϕ[1,:] .= 0.

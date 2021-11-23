@@ -13,6 +13,7 @@ const day   = 24*3600
 
 @views function simple_sheet(;  nx, ny,          # grid size
                                 itMax=1e5,       # maximal number of iterations
+                                dt=1e-3,         # physical time step, fixed
                                 do_monit=false,  # enable/disable plotting of intermediate results
                                 set_h_bc=false,  # whether to set dirichlet bc for h (at the nodes where ϕ d. bc are set)
                                                  # note: false is only applied if e_v_num = 0, otherwise bc are required
@@ -23,7 +24,6 @@ const day   = 24*3600
 
     # physics
     Lx, Ly = 100e3, 20e3                  # length/width of the domain, starts at (0, 0)
-    dt     = 1.0                          # physical time step
     ttot   = 1e9
     α      = 1.25
     β      = 1.5
@@ -31,11 +31,11 @@ const day   = 24*3600
     e_v    = 1e-6                         # void ratio for englacial storage
 
     # numerics
-    nout   = 1e4
+    nout   = 10^3
     if (e_v_num > 0.) set_h_bc=true end
 
     # derived
-    nt     = Int(ttot ÷ dt)
+    nt     = min(Int(ttot ÷ dt), itMax)
     dx, dy = Lx / (nx-3), Ly / (ny-3)     # the outermost points are ghost points
     xc, yc = LinRange(-dx, Lx+dx, nx), LinRange(-dy, Ly+dy, ny)
 
@@ -102,8 +102,8 @@ const day   = 24*3600
     it = 0
 
     # Time loop
-    if !use_CFL println("Running nt = $nt time steps (dt = $(dt*t_) sec.)") end
-    t_sol=@elapsed while t<ttot && it<itMax
+    if !use_CFL println("Running $nt iterations") end
+    t_sol=@elapsed while t<ttot && it<nt
 
         h .= max.(h, 0.0)
 
@@ -174,4 +174,5 @@ const day   = 24*3600
     return ϕ .* ϕ_, h .* h_, it, t_sol
 end
 
-# h, ϕ, t_sol, it = simple_sheet(; nx=64, ny=32, ttot=1day, itMax=5*1e4,do_monit=true, set_h_bc=true, use_CFL=false, e_v_num=1e-1, CN=0.5)
+ ϕ, h, it, t_sol = simple_sheet(; nx=64, ny=32, itMax=10^5, dt=10, do_monit=false, set_h_bc=true, use_CFL=false, e_v_num=1e-1, CN=0.5)
+print(t_sol)

@@ -10,7 +10,7 @@ using Printf, LinearAlgebra, Statistics, Plots
 const small = eps(Float64)
 const day   = 24*3600
 
-@views function compute_resid(Ki_h, Ki_ϕ, h, ϕ, dϕ_dx, dϕ_dy, gradϕ, d_eff, flux_x, flux_y, div_q, vo, vc, α, small, β, H, Σ, Γ, Λ, e_v, dx, dy, set_h_bc, h_bc)
+@views function compute_resid(Ki_h, Ki_ϕ, h, ϕ, dϕ_dx, dϕ_dy, gradϕ, d_eff, flux_x, flux_y, div_q, vo, vc, α, small, β, H, Σ, Γ, Λ, e_v, e_v_num, dx, dy, set_h_bc, h_bc)
 
     # BC
     h .= max.(h, 0.0)
@@ -38,7 +38,8 @@ const day   = 24*3600
     vc     .=  h .* (0.91 .* H .- ϕ).^3
 
     Ki_h   .= Σ .* inn(vo) .- Γ .* inn(vc)
-    Ki_ϕ   .= (- div_q .- Ki_h .+ Λ) ./ max.(e_v, small)
+    Ki_ϕ   .= (- div_q .- Ki_h .+ Λ) ./ max(e_v + e_v_num, small)
+    Ki_h  .+= e_v_num .* Ki_ϕ
 
     Ki_ϕ[1,:] .= 0.
     if set_h_bc
@@ -70,16 +71,17 @@ end
 
 @views function simple_sheet(;  nx, ny,          # grid size
                                 itMax,           # maximal number of iterations
+                                dt,              # physical time step, fixed
                                 do_monit=true,   # enable/disable plotting of intermediate results
-                                set_h_bc=false)  # whether to set dirichlet bc for h (at the nodes where ϕ d. bc are set)
+                                set_h_bc=false,  # whether to set dirichlet bc for h (at the nodes where ϕ d. bc are set)
+                                e_v_num=0)       # regularisation void ratio
     # physics
     Lx, Ly = 100e3, 20e3                        # length/width of the domain, starts at (0, 0)
-    dt     = 0.1                           # physical time step
     ttot   = 1e9
     α      = 1.25
     β      = 1.5
     m      = 7.93e-11                           # source term for SHMIP A1 test case
-    e_v    = 1e-3                               # void ratio for englacial storage
+    e_v    = 1e-6                               # void ratio for englacial storage
 
     # numerics
     nout   = 10
@@ -87,6 +89,7 @@ end
     nt     = min(Int(ttot ÷ dt), itMax)
     dx, dy = Lx / (nx-3), Ly / (ny-3)           # the outermost points are ghost points
     xc, yc = LinRange(-dx, Lx+dx, nx), LinRange(-dy, Ly+dy, ny)
+    if (e_v_num > 0.) set_h_bc=true end
 
     # ice thickness
     H           = zeros(nx, ny)
@@ -169,16 +172,16 @@ end
         while err > epsi && iter < 1e1
             Err1 .= ϕ
             Err2 .= h
-            compute_resid(K1_h, K1_ϕ,     h,     ϕ, dϕ_dx, dϕ_dy, gradϕ, d_eff, flux_x, flux_y, div_q, vo, vc, α, small, β, H, Σ, Γ, Λ, e_v, dx, dy, set_h_bc, h_bc)
+            compute_resid(K1_h, K1_ϕ,     h,     ϕ, dϕ_dx, dϕ_dy, gradϕ, d_eff, flux_x, flux_y, div_q, vo, vc, α, small, β, H, Σ, Γ, Λ, e_v, e_v_num, dx, dy, set_h_bc, h_bc)
             cumul_RK4!(Tmp_h, Tmp_ϕ, h, ϕ, K1_h, K1_ϕ, 0.5*dt)
 
-            compute_resid(K2_h, K2_ϕ, Tmp_h, Tmp_ϕ, dϕ_dx, dϕ_dy, gradϕ, d_eff, flux_x, flux_y, div_q, vo, vc, α, small, β, H, Σ, Γ, Λ, e_v, dx, dy, set_h_bc, h_bc)
+            compute_resid(K2_h, K2_ϕ, Tmp_h, Tmp_ϕ, dϕ_dx, dϕ_dy, gradϕ, d_eff, flux_x, flux_y, div_q, vo, vc, α, small, β, H, Σ, Γ, Λ, e_v, e_v_num, dx, dy, set_h_bc, h_bc)
             cumul_RK4!(Tmp_h, Tmp_ϕ, h, ϕ, K2_h, K2_ϕ, 0.5*dt)
 
-            compute_resid(K3_h, K3_ϕ, Tmp_h, Tmp_ϕ, dϕ_dx, dϕ_dy, gradϕ, d_eff, flux_x, flux_y, div_q, vo, vc, α, small, β, H, Σ, Γ, Λ, e_v, dx, dy, set_h_bc, h_bc)
+            compute_resid(K3_h, K3_ϕ, Tmp_h, Tmp_ϕ, dϕ_dx, dϕ_dy, gradϕ, d_eff, flux_x, flux_y, div_q, vo, vc, α, small, β, H, Σ, Γ, Λ, e_v, e_v_num, dx, dy, set_h_bc, h_bc)
             cumul_RK4!(Tmp_h, Tmp_ϕ, h, ϕ, K3_h, K3_ϕ, dt)
 
-            compute_resid(K4_h, K4_ϕ, Tmp_h, Tmp_ϕ, dϕ_dx, dϕ_dy, gradϕ, d_eff, flux_x, flux_y, div_q, vo, vc, α, small, β, H, Σ, Γ, Λ, e_v, dx, dy, set_h_bc, h_bc)
+            compute_resid(K4_h, K4_ϕ, Tmp_h, Tmp_ϕ, dϕ_dx, dϕ_dy, gradϕ, d_eff, flux_x, flux_y, div_q, vo, vc, α, small, β, H, Σ, Γ, Λ, e_v, e_v_num, dx, dy, set_h_bc, h_bc)
             update_RK4!(h, ϕ, h_o, ϕ_o, K1_h, K1_ϕ, K2_h, K2_ϕ, K3_h, K3_ϕ, K4_h, K4_ϕ, dt, set_h_bc, h_bc)
 
             Err1 .= abs.(Err1 .- ϕ)
@@ -204,4 +207,5 @@ end
     return ϕ .* ϕ_, h .* h_, ittot, t_sol
 end
 
-# ϕ, h, ittot, t_sol = simple_sheet(; nx=64, ny=32, itMax=2*10^3, do_monit=true, set_h_bc=false)
+ # ϕ, h, ittot, t_sol = simple_sheet(; nx=64, ny=32, itMax=200, dt=1e-4, do_monit=true, set_h_bc=true, e_v_num=1e-2)
+ # set_h_bc and e_v_num are not very helpful here

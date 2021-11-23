@@ -13,25 +13,24 @@ xs     = LinRange(0, 100e3, nx-2)
 h_ref = get_h_ref(xs)
 
 test_sets = Dict("diffeq_explicit"  => [(set_h_bc=false, e_v_num=0   ),
-                                        (set_h_bc=true,  e_v_num=0   ),
+                                        #(set_h_bc=true,  e_v_num=0   ),
                                         (set_h_bc=true,  e_v_num=1e-1)],
                  #"diffeq_impl"     =>   [],
-                "forward-euler_CN"  => [(set_h_bc=false, e_v_num=0,    use_CFL=false, CN=0  ),
-                                        (set_h_bc=false, e_v_num=0,    use_CFL=true,  CN=0  ),
-                                        (set_h_bc=false, e_v_num=0,    use_CFL=false, CN=0.5),
-                                        (set_h_bc=true,  e_v_num=0,    use_CFL=false, CN=0  ),
-                                        (set_h_bc=true,  e_v_num=1e-1, use_CFL=false, CN=0  ),
-                                        (set_h_bc=true,  e_v_num=1e-1, use_CFL=false, CN=0.5)],
+                "forward-euler_CN"  => [(set_h_bc=false, e_v_num=0,    CN=0  , dt=1e-4),
+                                        (set_h_bc=false, e_v_num=0,    CN=0.5, dt=1e-4),
+                                        #(set_h_bc=true,  e_v_num=1e-1, CN=0  , dt=10),
+                                        (set_h_bc=true,  e_v_num=1e-1, CN=0.5, dt=10  )],
 
                 "pseudo-transient"  => [(set_h_bc=false, e_v_num=0,    update_h_only=false, γ=0.8, dτ_h_=1e-5),
                                         (set_h_bc=false, e_v_num=0,    update_h_only=true,  γ=0.8, dτ_h_=1e-5),
                                         (set_h_bc=true,  e_v_num=0,    update_h_only=false, γ=0.8, dτ_h_=1e-5),
                                         (set_h_bc=true,  e_v_num=1e-1, update_h_only=false, γ=0.8, dτ_h_=1e-5)],
+
                 "RK4"               => [(set_h_bc=false, e_v_num=0.),
-                                        (set_h_bc=true,  e_v_num=0 ),
+                                        #(set_h_bc=true,  e_v_num=0 ),
                                         (set_h_bc=true,  e_v_num=0.1)],
-                "RK4_piccard_loop"  => [(set_h_bc=false),
-                                        (set_h_bc=true)]
+
+                "RK4_piccard_loop"  => [(set_h_bc=false, e_v_num=0, dt=1e-3)]
 )
 
 itMaxs = [5e3, 1e4]
