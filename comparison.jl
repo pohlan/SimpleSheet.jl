@@ -73,7 +73,7 @@ for method in keys(test_sets)
     end
 end
 toc = Base.time() - tic
-@printf("Executed in %f hours.", toc/3600)
+@printf("Executed in %f minutes.", toc/60)  # taking 52 minutes at the moment
 
 save("comparison.jld2", "df", df)
 
