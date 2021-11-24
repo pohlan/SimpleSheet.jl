@@ -16,7 +16,6 @@ const day   = 24*3600
                                 dt=1e-3,         # physical time step, fixed
                                 do_monit=false,  # enable/disable plotting of intermediate results
                                 set_h_bc=false,  # whether to set dirichlet bc for h (at the nodes where ϕ d. bc are set)
-                                                 # note: false is only applied if e_v_num = 0, otherwise bc are required
                                 e_v_num=0,       # regularisation void ratio
                                 use_CFL=false,   # true: use CFL criterion for dt, false: use fixed dt=1s
                                 CN=0             # Crank-Nicolson (CN=0.5), Forward Euler (CN=0)
@@ -32,7 +31,6 @@ const day   = 24*3600
 
     # numerics
     nout   = 10^3
-    if (e_v_num > 0.) set_h_bc=true end
 
     # derived
     nt     = min(Int(ttot ÷ dt), itMax)
@@ -102,7 +100,7 @@ const day   = 24*3600
     it = 0
 
     # Time loop
-    if !use_CFL println("Running $nt iterations") end
+    if !use_CFL @printf("Running for %d iterations. \n", nt) end
     t_sol=@elapsed while t<ttot && it<nt
 
         h .= max.(h, 0.0)

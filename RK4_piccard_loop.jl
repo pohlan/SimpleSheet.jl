@@ -90,7 +90,6 @@ end
     nt     = min(Int(ttot ÷ dt), itMax)
     dx, dy = Lx / (nx-3), Ly / (ny-3)           # the outermost points are ghost points
     xc, yc = LinRange(-dx, Lx+dx, nx), LinRange(-dy, Ly+dy, ny)
-    if (e_v_num > 0.) set_h_bc=true end
 
     # ice thickness
     H           = zeros(nx, ny)
@@ -161,7 +160,7 @@ end
     ittot    = 0
     it_outer = 0
     # Time loop
-    println("Running $nt iterations")
+    @printf("Running for %d iterations. \n", nt)
     t_sol=@elapsed while ittot < nt
 
         # timestep

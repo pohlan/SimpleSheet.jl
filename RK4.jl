@@ -73,7 +73,6 @@ end
                                 dt=1e-3,         # physical time step, fixed
                                 do_monit=false,   # enable/disable plotting of intermediate results
                                 set_h_bc=false,  # whether to set dirichlet bc for h (at the nodes where ϕ d. bc are set)
-                                                 # note: false is only applied if e_v_num = 0, otherwise bc are required
                                 e_v_num=0        # regularisation void ratio
     )
 
@@ -90,7 +89,6 @@ end
     nt     = min(Int(ttot ÷ dt), itMax)
     dx, dy = Lx / (nx-3), Ly / (ny-3)     # the outermost points are ghost points
     xc, yc = LinRange(-dx, Lx+dx, nx), LinRange(-dy, Ly+dy, ny)
-    if (e_v_num > 0.) set_h_bc=true end
 
     # ice thickness
     H           = zeros(nx, ny)
@@ -155,7 +153,7 @@ end
     h = copy(h0)
 
     # Time loop
-    println("Running $nt iterations")
+    @printf("Running for %d iterations. \n", nt)
     t_sol=@elapsed for it = 1:nt
 
         # timestep

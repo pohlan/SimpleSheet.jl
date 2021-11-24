@@ -20,7 +20,6 @@ const day      = 3600*24
 
 function make_ode_reg(; nx, ny,                 # grid size
                         set_h_bc=false,         # whether to set dirichlet bc for h (at the nodes where ϕ d. bc are set)
-                                                # note: false is only applied if e_v_num = 0, otherwise bc are required
                         e_v_num=0               # regularization void ratio
                         )
     # physics
@@ -33,7 +32,6 @@ function make_ode_reg(; nx, ny,                 # grid size
     # numerics
     dx, dy = Lx / (nx-3), Ly / (ny-3)     # the outermost points are ghost points
     xc, yc = LinRange(-dx, Lx+dx, nx), LinRange(-dy, Ly+dy, ny)
-    if (e_v_num > 0.) set_h_bc=true end
 
     # scaling factors
     H_     = 1000.0
@@ -100,8 +98,10 @@ function make_ode_reg(; nx, ny,                 # grid size
                 h[2,:] .= h_bc
             end
 
-            dhdt = inn(du.x[1])
-            dϕdt = inn(du.x[2])
+
+            dhdt = du.x[1]
+            dϕdt = du.x[2]
+
             # d_eff
             dϕ_dx  .= diff(ϕ, dims=1) ./ dx
             dϕ_dy  .= diff(ϕ, dims=2) ./ dy
@@ -119,13 +119,19 @@ function make_ode_reg(; nx, ny,                 # grid size
             vo     .= (h .< 1.0) .* (1.0 .- h)
             vc     .=  h .* (0.91 .* H .- ϕ).^3
 
-            dhdt      .= (Σ .* inn(vo) .- Γ .* inn(vc))
-            dϕdt      .= (.- div_q .- dhdt .+ Λ) ./ max.(e_v .+ e_v_num, small)
-            dϕdt[1,:] .= 0 # BCs, fixes https://github.com/pohlan/SimpleSheet.jl/pull/4#issue-1041245216
+            dhdt      .= (Σ .* vo .- Γ .* vc)
+            inn(dϕdt) .= (.- div_q .- inn(dhdt) .+ Λ) ./ max.(e_v .+ e_v_num, small)
+            dϕdt[2,:] .= 0 # BCs, fixes https://github.com/pohlan/SimpleSheet.jl/pull/4#issue-1041245216
             dhdt     .+= e_v_num.*dϕdt
             if set_h_bc
-                dhdt[1,:] .= 0
+                dhdt[2,:] .= 0
             end
+
+            # ghost point boundaries
+            dϕdt[[1,end],:] .= 0.0
+            dϕdt[:,[1,end]] .= 0.0
+            dhdt[[1,end],:] .= 0.0
+            dhdt[:,[1,end]] .= 0.0
 
             return nothing
         end
@@ -134,6 +140,7 @@ function make_ode_reg(; nx, ny,                 # grid size
 end
 
 function simple_sheet(; nx, ny, itMax, set_h_bc, e_v_num, do_plots=false)
+    @printf("Running for %d iterations. \n", itMax)
     ode!, ϕ0, h0, scales, H = make_ode_reg(; nx, ny, set_h_bc, e_v_num)
     tspan = (0, 1e9 / scales.t_)
     u0 = ArrayPartition(h0, ϕ0)
@@ -177,4 +184,4 @@ function simple_sheet(; nx, ny, itMax, set_h_bc, e_v_num, do_plots=false)
     return ϕ, h, itMax, toc
 end
 
-# ϕ, h, itMax, toc = simple_sheet(nx=64, ny=32, itMax=80, set_h_bc=true, e_v_num=1e-1)
+# ϕ, h, itMax, toc = simple_sheet(nx=64, ny=32, itMax=200, set_h_bc=true, e_v_num=1e-1, do_plots=true)

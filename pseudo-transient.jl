@@ -17,10 +17,11 @@ const day   = 24*3600
                                 dτ_h_,                  # pseudo-time step for h
                                 do_monit=false,         # enable/disable plotting of intermediate results
                                 set_h_bc=false,         # whether to set dirichlet bc for h (at the nodes where ϕ d. bc are set)
-                                                        # note: false is only applied if e_v_num = 0, otherwise bc are required
                                 e_v_num=0,              # regularisation void ratio
                                 update_h_only=false     # true: split step scheme, only update h in the beginning
                                 )
+
+    @printf("Running for %d iterations. \n", itMax)
 
     # physics
     Lx, Ly = 100e3, 20e3                  # length/width of the domain, starts at (0, 0)
@@ -36,7 +37,6 @@ const day   = 24*3600
     γ_h    = γ
     γ_ϕ    = γ
     tol    = 1e-6
-    if (e_v_num > 0.) set_h_bc=true end
 
     # derived
     dx, dy = Lx / (nx-3), Ly / (ny-3)     # the outermost points are ghost points
@@ -207,4 +207,4 @@ const day   = 24*3600
     return ϕ * ϕ_, h * h_, iter, t_sol
 end
 
-# ϕ, h, iter, t_sol = simple_sheet(; nx=64, ny=32, set_h_bc=true, e_v_num=1e-1, update_h_only=false,  γ=0.91, dτ_h_=1e-6, itMax=10^4, do_monit=true)
+# ϕ, h, iter, t_sol = simple_sheet(; nx=64, ny=32, set_h_bc=true, e_v_num=0, update_h_only=false,  γ=0.91, dτ_h_=1e-6, itMax=10^4, do_monit=true)
