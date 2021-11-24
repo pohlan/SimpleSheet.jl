@@ -1,4 +1,4 @@
-using DataFrames, CSV, Printf, Infiltrator
+using DataFrames, JLD2, Printf, Infiltrator
 
 # helper functions
 section(A) = mean(A, dims=2)[2:end-1]
@@ -52,7 +52,7 @@ for method in keys(test_sets)
         if startswith(method, "diffeq")
             itMaxs = [1e3, 5e3, 1e4, 2e4]
         else
-            itMaxs = [1e3, 5e3, 1e4, 2e4, 5e4, 1e5, 5e5]
+            itMaxs = [1e3, 5e3, 1e4, 2e4, 5e4, 1e5]
         end
 
         @printf("Running %s for test_set %d out of %d \n", method, i, length(test_sets[method]))
@@ -75,7 +75,7 @@ end
 toc = Base.time() - tic
 @printf("Executed in %f hours.", toc/3600)
 
-CSV.write("comparison.csv", df);
+save("comparison.jld2", "df", df)
 
 # basic plotting with Plots
 # all h and ϕ cross sections
