@@ -4,6 +4,7 @@ authors = ["pohlan <annegret.pohle@outlook.com>"]
 version = "0.1.0"
 
 [deps]
+CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 DiffEqBase = "2b5f629d-d688-5b77-993f-72d75c75574e"
 DiffEqOperators = "9fdde737-9c7f-55bf-ade8-46b3f136cc48"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"

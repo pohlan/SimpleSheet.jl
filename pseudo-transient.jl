@@ -180,19 +180,16 @@ const day   = 24*3600
 
         iter += 1
 
-        # errors
-        if update_h_only || iter % 1000 == 0
+        # # errors and plot
+        if (iter % nout == 0 || update_h_only) && do_monit
+
             err_h = norm(Res_h) / sqrt(length(Res_h))
             err_ϕ = norm(Res_ϕ) / sqrt(length(Res_ϕ))
             @printf("it %d, err_h = %1.2e, err_ϕ = %1.2e \n", iter, err_h, err_ϕ)
-
             push!(iters, iter)
             push!(errs_h, err_h)
             push!(errs_ϕ, err_ϕ)
-        end
 
-        # plot
-        if (iter % nout == 0 || update_h_only) && do_monit
             p1 = Plt.plot(ϕ[2:end-1, end÷2], label="ϕ", xlabel="x", title="ϕ cross-sec.")
             p2 = Plt.plot(h[2:end-1, end÷2], label="h", xlabel="x", title="h cross-sec.")
             p3 = Plt.plot(abs.(Res_ϕ[:, end÷2]), label="abs(Res_ϕ)", xlabel="x", title="res cross-sec.")

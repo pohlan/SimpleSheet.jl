@@ -1,4 +1,4 @@
-using DataFrames, Infiltrator
+using DataFrames, CSV, Printf, Infiltrator
 
 # helper functions
 section(A) = mean(A, dims=2)[2:end-1]
@@ -34,7 +34,6 @@ test_sets = Dict("diffeq_explicit"  => [(set_h_bc=false, e_v_num=0   ),
                 "RK4_piccard_loop"  => [(set_h_bc=false, e_v_num=0, dt=1e-3)]
 )
 
-itMaxs = [5e3, 1e4]
 df    = DataFrame(method=String[], kwargs=NamedTuple[], ϕ_test = Array[], h_test = Array[], rms_ϕ=Array{Float64}[], rms_h=Array{Float64}[], nit=Array{Int64}[], t_run=Array{Float64}[])
 tic = Base.time()
 for method in keys(test_sets)
@@ -49,6 +48,12 @@ for method in keys(test_sets)
         rms_h  = []
         nit    = []
         t_run  = []
+
+        if startswith(method, "diffeq")
+            itMaxs = [1e3, 5e3, 1e4, 2e4]
+        else
+            itMaxs = [1e3, 5e3, 1e4, 2e4, 5e4, 1e5, 5e5]
+        end
 
         @printf("Running %s for test_set %d out of %d \n", method, i, length(test_sets[method]))
 
@@ -68,7 +73,9 @@ for method in keys(test_sets)
     end
 end
 toc = Base.time() - tic
-print(toc)
+@printf("Executed in %f hours.", toc/3600)
+
+CSV.write("comparison.csv", df);
 
 # basic plotting with Plots
 # all h and ϕ cross sections

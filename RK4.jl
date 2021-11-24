@@ -71,7 +71,7 @@ end
 @views function simple_sheet(;  nx, ny,          # grid size
                                 itMax,           # maximal number of iterations
                                 dt=1e-3,         # physical time step, fixed
-                                do_monit=true,   # enable/disable plotting of intermediate results
+                                do_monit=false,   # enable/disable plotting of intermediate results
                                 set_h_bc=false,  # whether to set dirichlet bc for h (at the nodes where ϕ d. bc are set)
                                                  # note: false is only applied if e_v_num = 0, otherwise bc are required
                                 e_v_num=0        # regularisation void ratio
