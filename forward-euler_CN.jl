@@ -130,14 +130,14 @@ const day   = 24*3600
         # ux     .= av_xi(flux_x) ./ inn(h)
         # uy     .= av_yi(flux_y) ./ inn(h)
 
-        dhdt   .= Σ .* inn(vo) .- Γ .* inn(vc)
-        dϕdt   .= (- div_q .- dhdt .+ Λ) ./ max.(e_v .+ e_v_num, small)
-        dhdt  .+= e_v_num .* dϕdt
+        dhdt      .= Σ .* inn(vo) .- Γ .* inn(vc)
+        dϕdt      .= (- div_q .- dhdt .+ Λ) ./ max.(e_v .+ e_v_num, small)
+        dϕdt[1,:] .= 0                    # Dirichlet B.C. points
+        dhdt     .+= e_v_num .* dϕdt
 
         if set_h_bc
             dhdt[1,:] .= 0
         end
-        dϕdt[1,:] .= 0
 
         # timestep
         # dt_ϕ = e_v .* min(dx,dy)^2 ./ maximum(d_eff) ./ 4.1
@@ -162,8 +162,8 @@ const day   = 24*3600
         # check convergence criterion
         if (it % nout == 0) && do_monit
             # visu
-            p1 = Plt.plot(ϕ[2:end-1,end÷2])
-            p2 = Plt.plot(h[2:end-1,end÷2])
+            p1 = Plt.plot(ϕ[2:end-1,end÷2] .* ϕ_)
+            p2 = Plt.plot(h[2:end-1,end÷2] .* h_)
             Plt.display(Plt.plot(p1, p2))
             @printf("it %d, dt = %1.3e s, t = %1.3f day \n", it, dt*t_, t*t_/day)
         end
@@ -172,4 +172,4 @@ const day   = 24*3600
     return ϕ .* ϕ_, h .* h_, it, t_sol
 end
 
-# ϕ, h, it, t_sol = simple_sheet(; nx=64, ny=32, itMax=10^5, dt=10, do_monit=false, set_h_bc=true, use_CFL=false, e_v_num=1e-1, CN=0.5)
+ϕ, h, it, t_sol = simple_sheet(; nx=64, ny=32, itMax=10^7, dt=100, do_monit=true, set_h_bc=false, use_CFL=false, e_v_num=0.5, CN=0.)

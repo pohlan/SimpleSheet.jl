@@ -38,11 +38,11 @@ const day   = 24*3600
     vo     .= (h .< 1.0) .* (1.0 .- h)
     vc     .=  h .* (0.91 .* H .- ϕ).^3
 
-    Ki_h   .= Σ .* inn(vo) .- Γ .* inn(vc)
-    Ki_ϕ   .= (- div_q .- Ki_h .+ Λ) ./ max(e_v + e_v_num, small)
-    Ki_h  .+= e_v_num .* Ki_ϕ
+    Ki_h       .= Σ .* inn(vo) .- Γ .* inn(vc)
+    Ki_ϕ       .= (- div_q .- Ki_h .+ Λ) ./ max(e_v + e_v_num, small)
+    Ki_ϕ[1, :] .= 0.                         # Dirichlet B.C. points
+    Ki_h      .+= e_v_num .* Ki_ϕ
 
-    Ki_ϕ[1,:] .= 0.
     if set_h_bc
         Ki_h[1,:] .= h_bc
     end

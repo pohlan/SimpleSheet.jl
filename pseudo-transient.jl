@@ -150,9 +150,10 @@ const day   = 24*3600
         div_q  .= diff(flux_x[:,2:end-1],dims=1) ./ dx .+ diff(flux_y[2:end-1,:],dims=2) ./ dy
 
         # residuals
-        dhdt   .= Σ .* inn(vo) .- Γ .* inn(vc)
-        dϕdt   .= (.- div_q .- dhdt .+ Λ)
-        dhdt  .+= e_v_num .* dϕdt
+        dhdt      .= Σ .* inn(vo) .- Γ .* inn(vc)
+        dϕdt      .= (.- div_q .- dhdt .+ Λ)
+        dϕdt[1,:] .= 0.                                # Dirichlet B.C. points, important for next line if e_v_num > 0
+        dhdt     .+= e_v_num .* dϕdt
 
         Res_ϕ  .= - (e_v + e_v_num) * (inn(ϕ) .- inn(ϕ0)) ./ dt  .+ dϕdt
         Res_h  .= - (inn(h) .- inn(h0)) ./ dt .+ dhdt
