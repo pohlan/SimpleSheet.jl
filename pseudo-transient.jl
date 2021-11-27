@@ -81,25 +81,25 @@ const day   = 24*3600
     end
 
     # array allocation
-    dϕ_dx  = zeros(nx-1,ny  )
-    dϕ_dy  = zeros(nx  ,ny-1)
-    gradϕ  = zeros(nx-2,ny-2)
-    d_eff  = zeros(nx  ,ny  )
-    flux_x = zeros(nx-1,ny  )
-    flux_y = zeros(nx  ,ny-1)
-    vo     = zeros(nx  ,ny  )
-    vc     = zeros(nx  ,ny  )
-    ux     = zeros(nx-2,ny-2)
-    uy     = zeros(nx-2,ny-2)
-    div_q  = zeros(nx-2,ny-2)
-    Res_h  = zeros(nx-2,ny-2)
-    Res_ϕ  = zeros(nx-2,ny-2)
-    dhdτ   = zeros(nx-2,ny-2)
-    dϕdτ   = zeros(nx-2,ny-2)
-    dhdt   = zeros(nx-2,ny-2)
-    dϕdt   = zeros(nx-2,ny-2)
-    dτ_h   = zeros(nx-2,ny-2)
-    dτ_ϕ   = zeros(nx-2,ny-2)
+    dϕ_dx   = zeros(nx-1,ny  )
+    dϕ_dy   = zeros(nx  ,ny-1)
+    gradϕ   = zeros(nx-2,ny-2)
+    d_eff   = zeros(nx  ,ny  )
+    flux_x  = zeros(nx-1,ny  )
+    flux_y  = zeros(nx  ,ny-1)
+    vo      = zeros(nx  ,ny  )
+    vc      = zeros(nx  ,ny  )
+    ux      = zeros(nx-2,ny-2)
+    uy      = zeros(nx-2,ny-2)
+    div_q   = zeros(nx-2,ny-2)
+    Res_h   = zeros(nx-2,ny-2)
+    Res_ϕ   = zeros(nx-2,ny-2)
+    dhdτ    = zeros(nx-2,ny-2)
+    dϕdτ    = zeros(nx-2,ny-2)
+    dhdt    = zeros(nx-2,ny-2)
+    dϕdt_ev = zeros(nx-2,ny-2)
+    dτ_h    = zeros(nx-2,ny-2)
+    dτ_ϕ    = zeros(nx-2,ny-2)
 
     iters  = []
     errs_ϕ = []
@@ -150,12 +150,12 @@ const day   = 24*3600
         div_q  .= diff(flux_x[:,2:end-1],dims=1) ./ dx .+ diff(flux_y[2:end-1,:],dims=2) ./ dy
 
         # residuals
-        dhdt      .= Σ .* inn(vo) .- Γ .* inn(vc)
-        dϕdt      .= (.- div_q .- dhdt .+ Λ)
-        dϕdt[1,:] .= 0.                                # Dirichlet B.C. points, important for next line if e_v_num > 0
-        dhdt     .+= e_v_num .* dϕdt
+        dhdt         .= Σ .* inn(vo) .- Γ .* inn(vc)
+        dϕdt_ev      .= (.- div_q .- dhdt .+ Λ)           # note: this is dϕdt * (e_v + e_vnum); for the case e_v == e_v_num == 0 it is more convenient this way
+        dϕdt_ev[1,:] .= 0.                                # Dirichlet B.C. points, important for next line if e_v_num > 0
+        dhdt        .+= e_v_num / (e_v + e_v_num) .* dϕdt_ev
 
-        Res_ϕ  .= - (e_v + e_v_num) * (inn(ϕ) .- inn(ϕ0)) ./ dt  .+ dϕdt
+        Res_ϕ  .= - (e_v + e_v_num) * (inn(ϕ) .- inn(ϕ0)) ./ dt  .+ dϕdt_ev
         Res_h  .= - (inn(h) .- inn(h0)) ./ dt .+ dhdt
 
         Res_ϕ[1, :] .= 0.      # Dirichlet B.C. points, no update
@@ -191,8 +191,8 @@ const day   = 24*3600
             push!(errs_h, err_h)
             push!(errs_ϕ, err_ϕ)
 
-            p1 = Plt.plot(ϕ[2:end-1, end÷2], label="ϕ", xlabel="x", title="ϕ cross-sec.")
-            p2 = Plt.plot(h[2:end-1, end÷2], label="h", xlabel="x", title="h cross-sec.")
+            p1 = Plt.plot(ϕ[2:end-1, end÷2] .*ϕ_, label="ϕ", xlabel="x", title="ϕ cross-sec.")
+            p2 = Plt.plot(h[2:end-1, end÷2] .*h_, label="h", xlabel="x", title="h cross-sec.")
             p3 = Plt.plot(abs.(Res_ϕ[:, end÷2]), label="abs(Res_ϕ)", xlabel="x", title="res cross-sec.")
             p4 = Plt.plot(abs.(Res_h[:, end÷2]), label="abs(Res_h)", xlabel="x", title="res cross-sec.")
             if max(err_ϕ, err_h) > tol && iter<itMax
@@ -208,4 +208,4 @@ const day   = 24*3600
     return ϕ * ϕ_, h * h_, iter, t_sol
 end
 
-# ϕ, h, iter, t_sol = simple_sheet(; nx=64, ny=32, set_h_bc=true, e_v_num=0, update_h_only=false,  γ=0.91, dτ_h_=1e-6, itMax=10^4, do_monit=true)
+ ϕ, h, iter, t_sol = simple_sheet(; nx=64, ny=32, set_h_bc=false, e_v_num=0.2, update_h_only=false,  γ=0.9, dτ_h_=1.5e-5, itMax=3*10^4, do_monit=true)
