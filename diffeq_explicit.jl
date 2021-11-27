@@ -139,8 +139,8 @@ function make_ode_reg(; nx, ny,                 # grid size
     return ode!, copy(ϕ0), copy(h0), (;ϕ_, h_, x_, q_, t_, H_, Σ, Γ, Λ), H
 end
 
-function simple_sheet(; nx, ny, itMax, set_h_bc, e_v_num, do_plots=false)
-    @printf("Running for %d iterations. \n", itMax)
+function simple_sheet(; nx, ny, tol=1e-8, set_h_bc, e_v_num, do_plots=false)
+    @printf("Running for reltol=%f. \n", tol)
     ode!, ϕ0, h0, scales, H = make_ode_reg(; nx, ny, set_h_bc, e_v_num)
     tspan = (0, 1e9 / scales.t_)
     u0 = ArrayPartition(h0, ϕ0)
@@ -162,7 +162,7 @@ function simple_sheet(; nx, ny, itMax, set_h_bc, e_v_num, do_plots=false)
     # - 10s for tol=1e-7 (but solution is a bit unstable)
     # Note that about tol 1e-8 is needed to get a stable, non-oscillatory solution
     tic = Base.time()
-    sol = solve(prob, ROCK4(), reltol=1e-8, maxiters=itMax, save_everystep=true, abstol=1e-8, isoutofdomain=(u,p,t) -> any(u.x[1].<0)); #, dtmax=150/scales.t_) #, save_on=false) #, isoutofdomain=(u,p,t) -> any(u.x[1]<0));
+    sol = solve(prob, ROCK4(), reltol=tol, save_everystep=true, abstol=1e-8, isoutofdomain=(u,p,t) -> any(u.x[1].<0)); #, dtmax=150/scales.t_) #, save_on=false) #, isoutofdomain=(u,p,t) -> any(u.x[1]<0));
     toc = Base.time() - tic
 
     h = sol.u[end].x[1]*scales.h_;
@@ -181,7 +181,7 @@ function simple_sheet(; nx, ny, itMax, set_h_bc, e_v_num, do_plots=false)
         Plt.display(Plt.plot(sol.t*scales.t_/day, diff(sol.t*scales.t_), reuse=false, xlabel="t (day)", ylabel="timestep (s)"))#, yscale=:log10))
     end
 
-    return ϕ, h, itMax, toc
+    return ϕ, h, toc
 end
 
-# ϕ, h, itMax, toc = simple_sheet(nx=64, ny=32, itMax=200, set_h_bc=true, e_v_num=1e-1, do_plots=true)
+# ϕ, h, toc = simple_sheet(nx=64, ny=32, itMax=200, set_h_bc=true, e_v_num=1e-1, do_plots=true)

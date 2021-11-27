@@ -12,7 +12,7 @@ const small = eps(Float64)
 const day   = 24*3600
 
 @views function simple_sheet(;  nx, ny,          # grid size
-                                itMax=1e5,       # maximal number of iterations
+                                itMax=1e6,       # maximal number of iterations
                                 dt=1e-3,         # physical time step, fixed
                                 do_monit=false,  # enable/disable plotting of intermediate results
                                 set_h_bc=false,  # whether to set dirichlet bc for h (at the nodes where ϕ d. bc are set)
@@ -169,7 +169,7 @@ const day   = 24*3600
         end
 
     end
-    return ϕ .* ϕ_, h .* h_, it, t_sol
+    return ϕ .* ϕ_, h .* h_, t_sol
 end
 
-ϕ, h, it, t_sol = simple_sheet(; nx=64, ny=32, itMax=10^7, dt=100, do_monit=true, set_h_bc=false, use_CFL=false, e_v_num=0.5, CN=0.)
+# ϕ, h, it, t_sol = simple_sheet(; nx=64, ny=32, itMax=10^7, dt=100, do_monit=true, set_h_bc=false, use_CFL=false, e_v_num=0.5, CN=0.)

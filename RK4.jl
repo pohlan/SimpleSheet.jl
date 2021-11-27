@@ -69,7 +69,7 @@ end
 end
 
 @views function simple_sheet(;  nx, ny,          # grid size
-                                itMax,           # maximal number of iterations
+                                itMax=10^6,           # maximal number of iterations
                                 dt=1e-3,         # physical time step, fixed
                                 do_monit=false,   # enable/disable plotting of intermediate results
                                 set_h_bc=false,  # whether to set dirichlet bc for h (at the nodes where ϕ d. bc are set)
@@ -180,7 +180,7 @@ end
             @printf("it %d (dt = %1.3e), max(h) = %1.3f \n", it, dt, maximum(inn(h)))
         end
     end
-    return ϕ .* ϕ_, h .* h_, nt, t_sol
+    return ϕ .* ϕ_, h .* h_, t_sol
 end
 
-# ϕ, h, nt, t_sol = simple_sheet(; nx=64, ny=32, itMax=10^5, do_monit=true, set_h_bc=true, e_v_num=0.1, dt=10)
+# ϕ, h, t_sol = simple_sheet(; nx=64, ny=32, itMax=10^5, do_monit=true, set_h_bc=true, e_v_num=0.1, dt=10)

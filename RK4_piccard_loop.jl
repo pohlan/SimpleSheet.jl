@@ -71,9 +71,9 @@ end
 end
 
 @views function simple_sheet(;  nx, ny,          # grid size
-                                itMax,           # maximal number of iterations
+                                itMax=10^6,      # maximal number of iterations
                                 dt,              # physical time step, fixed
-                                do_monit=false,   # enable/disable plotting of intermediate results
+                                do_monit=false,  # enable/disable plotting of intermediate results
                                 set_h_bc=false,  # whether to set dirichlet bc for h (at the nodes where ϕ d. bc are set)
                                 e_v_num=0)       # regularisation void ratio
     # physics
@@ -204,8 +204,8 @@ end
             @printf("it %d, dt = %1.2e, max(ϕ) = %1.3f, max(h) = %1.3f (iter = %d) \n", ittot, dt .* t_, maximum(inn(ϕ)), maximum(inn(h)), iter)
         end
     end
-    return ϕ .* ϕ_, h .* h_, ittot, t_sol
+    return ϕ .* ϕ_, h .* h_, t_sol
 end
 
- # ϕ, h, ittot, t_sol = simple_sheet(; nx=64, ny=32, itMax=200, dt=1e-4, do_monit=true, set_h_bc=true, e_v_num=1e-2)
+ # ϕ, h, t_sol = simple_sheet(; nx=64, ny=32, itMax=200, dt=1e-4, do_monit=true, set_h_bc=true, e_v_num=1e-2)
  # set_h_bc and e_v_num are not very helpful here

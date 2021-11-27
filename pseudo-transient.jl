@@ -13,6 +13,7 @@ const day   = 24*3600
 
 @views function simple_sheet(;  nx, ny,                 # grid size
                                 itMax,                  # maximal number of iterations
+                                tol=1e-6,               # tolerance, convergence criterion
                                 γ,                      # damping parameter (γ_h = γ_ϕ)
                                 dτ_h_,                  # pseudo-time step for h
                                 do_monit=false,         # enable/disable plotting of intermediate results
@@ -36,7 +37,6 @@ const day   = 24*3600
     nout   = 1000
     γ_h    = γ
     γ_ϕ    = γ
-    tol    = 1e-6
 
     # derived
     dx, dy = Lx / (nx-3), Ly / (ny-3)     # the outermost points are ghost points
@@ -114,7 +114,7 @@ const day   = 24*3600
     iter  = 0.
 
     # PT iteration loop
-    t_sol = @elapsed while iter<itMax # && max(err_ϕ, err_h) > tol
+    t_sol = @elapsed while iter<itMax && max(err_ϕ, err_h) > tol
         h .= max.(h, 0.0)
 
         if  iter < 100 && update_h_only # once update_h_only = false it cannot go back
@@ -205,7 +205,7 @@ const day   = 24*3600
         end
     end
 
-    return ϕ * ϕ_, h * h_, iter, t_sol
+    return ϕ * ϕ_, h * h_, t_sol
 end
 
- ϕ, h, iter, t_sol = simple_sheet(; nx=64, ny=32, set_h_bc=false, e_v_num=0.2, update_h_only=false,  γ=0.9, dτ_h_=1.5e-5, itMax=3*10^4, do_monit=true)
+# ϕ, h, t_sol = simple_sheet(; nx=64, ny=32, e_v_num=0.2, update_h_only=false,  γ=0.9, dτ_h_=1.5e-5, itMax=3*10^4, do_monit=true)

@@ -46,19 +46,23 @@ for method in keys(test_sets)
         h_test = Array[]
         rms_ϕ  = []
         rms_h  = []
-        nit    = []
+        work   = []
         t_run  = []
 
-        if startswith(method, "diffeq")
-            itMaxs = [1e3, 5e3, 1e4, 2e4]
+        if any(method .== ["diffeq_explicit", "pseudo-transient"])
+            works = [1e3, 5e3, 1e4, 2e4]             # tolerance
         else
-            itMaxs = [1e3, 5e3, 1e4, 2e4, 5e4, 1e5]
+            works = [1e3, 5e3, 1e4, 2e4, 5e4, 1e5]   # dt
         end
 
         @printf("Running %s for test_set %d out of %d \n", method, i, length(test_sets[method]))
 
-        for itMax in itMaxs
-            ϕ, h, it, t = simple_sheet(; nx, ny, itMax, kwargs...)
+        for w in works
+            if any(method .== ["diffeq_explicit", "pseudo-transient"])
+                ϕ, h, t = simple_sheet(; nx, ny, tol=w, kwargs...)
+            else
+                ϕ, h, t = simple_sheet(; nx, ny, dt=w, kwargs...)
+            end
             ϕs = section(ϕ)
             hs = section(h)
 
@@ -66,10 +70,10 @@ for method in keys(test_sets)
             push!(h_test, hs)
             push!(rms_ϕ, rms(ϕs .- ϕ_ref))
             push!(rms_h, rms(hs .- h_ref))
-            push!(nit, it)
+            push!(work, w)
             push!(t_run, t)
         end
-        push!(df, (;method, kwargs, ϕ_test, h_test, rms_ϕ, rms_h, nit, t_run))
+        push!(df, (;method, kwargs, ϕ_test, h_test, rms_ϕ, rms_h, work, t_run))
     end
 end
 toc = Base.time() - tic
