@@ -12,7 +12,7 @@ const small = eps(Float64)
 const day   = 24*3600
 
 @views function simple_sheet(;  nx, ny,                 # grid size
-                                itMax,                  # maximal number of iterations
+                                itMax=10^7,             # maximal number of iterations
                                 tol=1e-6,               # tolerance, convergence criterion
                                 γ,                      # damping parameter (γ_h = γ_ϕ)
                                 dτ_h_,                  # pseudo-time step for h
@@ -22,16 +22,17 @@ const day   = 24*3600
                                 update_h_only=false     # true: split step scheme, only update h in the beginning
                                 )
 
-    @printf("Running for %d iterations. \n", itMax)
+    @printf("Running for tol = %1.e. \n", tol)
 
     # physics
     Lx, Ly = 100e3, 20e3                  # length/width of the domain, starts at (0, 0)
-    dt     = 1e9                          # physical time step
+    dt     = 8000day                      # physical time step
     dt_h   = 0.5
     α      = 1.25
     β      = 1.5
     m      = 7.93e-11                           # source term for SHMIP A1 test case
     e_v    = 1e-6                               # void ratio for englacial storage
+    ev_num_kw = e_v_num
 
     # numerics
     nout   = 1000
@@ -119,9 +120,11 @@ const day   = 24*3600
 
         if  iter < 100 && update_h_only # once update_h_only = false it cannot go back
             dτ_h = 1e-3
+            e_v_num=0
         else
             dτ_h = dτ_h_
             update_h_only = false
+            e_v_num = ev_num_kw
         end
 
         # boundary conditions
@@ -181,26 +184,28 @@ const day   = 24*3600
 
         iter += 1
 
-        # # errors and plot
-        if (iter % nout == 0 || update_h_only) && do_monit
+        # errors and plot
+        if iter % nout == 0 || update_h_only
 
             err_h = norm(Res_h) / sqrt(length(Res_h))
             err_ϕ = norm(Res_ϕ) / sqrt(length(Res_ϕ))
-            @printf("it %d, err_h = %1.2e, err_ϕ = %1.2e \n", iter, err_h, err_ϕ)
             push!(iters, iter)
             push!(errs_h, err_h)
             push!(errs_ϕ, err_ϕ)
 
-            p1 = Plt.plot(ϕ[2:end-1, end÷2] .*ϕ_, label="ϕ", xlabel="x", title="ϕ cross-sec.")
-            p2 = Plt.plot(h[2:end-1, end÷2] .*h_, label="h", xlabel="x", title="h cross-sec.")
-            p3 = Plt.plot(abs.(Res_ϕ[:, end÷2]), label="abs(Res_ϕ)", xlabel="x", title="res cross-sec.")
-            p4 = Plt.plot(abs.(Res_h[:, end÷2]), label="abs(Res_h)", xlabel="x", title="res cross-sec.")
-            if max(err_ϕ, err_h) > tol && iter<itMax
-                Plt.display(Plt.plot(p1, p3, p2, p4))
-            else
-                p5 = Plt.plot(iters, errs_ϕ, xlabel="# iterations", title="residual error", label="err_ϕ", yscale=:log10)
-                p6 = Plt.plot(iters, errs_h, xlabel="# iterations", title="residual error", label="err_h", yscale=:log10)
-                Plt.display(Plt.plot(p1, p3, p5, p2, p4, p6))
+            if do_monit
+                @printf("it %d, err_h = %1.2e, err_ϕ = %1.2e \n", iter, err_h, err_ϕ)
+                p1 = Plt.plot(ϕ[2:end-1, end÷2] .*ϕ_, label="ϕ", xlabel="x", title="ϕ cross-sec.")
+                p2 = Plt.plot(h[2:end-1, end÷2] .*h_, label="h", xlabel="x", title="h cross-sec.")
+                p3 = Plt.plot(abs.(Res_ϕ[:, end÷2]), label="abs(Res_ϕ)", xlabel="x", title="res cross-sec.")
+                p4 = Plt.plot(abs.(Res_h[:, end÷2]), label="abs(Res_h)", xlabel="x", title="res cross-sec.")
+                if max(err_ϕ, err_h) > tol && iter<itMax
+                    Plt.display(Plt.plot(p1, p3, p2, p4))
+                else
+                    p5 = Plt.plot(iters, errs_ϕ, xlabel="# iterations", title="residual error", label="err_ϕ", yscale=:log10)
+                    p6 = Plt.plot(iters, errs_h, xlabel="# iterations", title="residual error", label="err_h", yscale=:log10)
+                    Plt.display(Plt.plot(p1, p3, p5, p2, p4, p6))
+                end
             end
         end
     end
@@ -208,4 +213,4 @@ const day   = 24*3600
     return ϕ * ϕ_, h * h_, t_sol
 end
 
-# ϕ, h, t_sol = simple_sheet(; nx=64, ny=32, e_v_num=0.2, update_h_only=false,  γ=0.9, dτ_h_=1.5e-5, itMax=3*10^4, do_monit=true)
+# ϕ, h, t_sol = simple_sheet(; nx=64, ny=32, e_v_num=0,    update_h_only=false, γ=0.9, dτ_h_=7.2e-6, tol=1e-3, do_monit=true)

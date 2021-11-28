@@ -72,13 +72,14 @@ end
 
 @views function simple_sheet(;  nx, ny,          # grid size
                                 itMax=10^6,      # maximal number of iterations
-                                dt,              # physical time step, fixed
+                                dt=1e-3,         # physical time step, fixed
                                 do_monit=false,  # enable/disable plotting of intermediate results
                                 set_h_bc=false,  # whether to set dirichlet bc for h (at the nodes where ϕ d. bc are set)
+                                use_CFL=true,    # whether dt should be adapted according to CFL condition
                                 e_v_num=0)       # regularisation void ratio
     # physics
     Lx, Ly = 100e3, 20e3                        # length/width of the domain, starts at (0, 0)
-    ttot   = 1e9
+    ttot   = 8000day
     α      = 1.25
     β      = 1.5
     m      = 7.93e-11                           # source term for SHMIP A1 test case
@@ -159,12 +160,16 @@ end
     Err2 = zeros(nx  ,ny  )
     ittot    = 0
     it_outer = 0
+    t        = 0.
     # Time loop
-    @printf("Running for %d iterations. \n", nt)
-    t_sol=@elapsed while ittot < nt
+    @printf("Running for e_v_num = %1.e \n", e_v_num)
+    t_sol=@elapsed while t < ttot
 
         # timestep
-        # dt = min(dx,dy)^2 ./ maximum(d_eff) ./ 4.1
+        if use_CFL && it_outer > 0
+            dt = (e_v .+ e_v_num) .* min(dx,dy)^2 ./ max(maximum(d_eff), small) ./ 4.1
+        end
+
         h_o .= h
         ϕ_o .= ϕ
 
@@ -193,19 +198,20 @@ end
         end
 
         it_outer += 1
+        t        += dt
 
         # check convergence criterion
         if (it_outer % nout == 0) && do_monit
             # @show dtp = min(dx,dy)^2 ./ maximum(d_eff) ./ 4.1
             # visu
-            p1 = Plt.plot(ϕ[2:end-1,end÷2])
-            p2 = Plt.plot(h[2:end-1,end÷2])
+            p1 = Plt.plot(ϕ[2:end-1,end÷2] .* ϕ_)
+            p2 = Plt.plot(h[2:end-1,end÷2] .* h_)
             Plt.display(Plt.plot(p1, p2))
-            @printf("it %d, dt = %1.2e, max(ϕ) = %1.3f, max(h) = %1.3f (iter = %d) \n", ittot, dt .* t_, maximum(inn(ϕ)), maximum(inn(h)), iter)
+            @printf("it %d (piccard iter = %d), dt = %1.2e, t = %1.f days \n", ittot, iter, dt * t_, t/day * t_)
         end
     end
     return ϕ .* ϕ_, h .* h_, t_sol
 end
 
- # ϕ, h, t_sol = simple_sheet(; nx=64, ny=32, itMax=200, dt=1e-4, do_monit=true, set_h_bc=true, e_v_num=1e-2)
+ # ϕ, h, t_sol = simple_sheet(; nx=64, ny=32, use_CFL=true, do_monit=true, set_h_bc=true, e_v_num=1e6)
  # set_h_bc and e_v_num are not very helpful here

@@ -12,34 +12,31 @@ xs     = LinRange(0, 100e3, nx-2)
 ϕ_ref = get_ϕ_ref(xs)
 h_ref = get_h_ref(xs)
 
-test_sets = Dict("diffeq_explicit"  => [(set_h_bc=false, e_v_num=0   ),
-                                        #(set_h_bc=true,  e_v_num=0   ),
-                                        (set_h_bc=true,  e_v_num=1e-1)],
-                 #"diffeq_impl"     =>   [],
-                "forward-euler_CN"  => [(set_h_bc=false, e_v_num=0,    CN=0  , dt=1e-4),
-                                        (set_h_bc=false, e_v_num=0,    CN=0.5, dt=1e-4),
-                                        #(set_h_bc=true,  e_v_num=1e-1, CN=0  , dt=10),
-                                        (set_h_bc=true,  e_v_num=1e-1, CN=0.5, dt=10  )],
+test_sets = Dict("diffeq_explicit"  => (kwargs = ((tol=1e-8,),),
+                                        work   = [5*10^4, 2*10^4, 10^4, 5*10^3, 10^3, 10^2]),                   # e_v_num
 
-                "pseudo-transient"  => [(set_h_bc=false, e_v_num=0,    update_h_only=false, γ=0.91, dτ_h_=7.3e-6),
-                                        (set_h_bc=false, e_v_num=0,    update_h_only=true,  γ=0.91, dτ_h_=1.9e-5),
-                                        (set_h_bc=true,  e_v_num=0,    update_h_only=false, γ=0.91, dτ_h_=7.2e-6),
-                                        (set_h_bc=true,  e_v_num=1e-1, update_h_only=false, γ=0.90,  dτ_h_=1.1e-5),
-                                        (set_h_bc=true,  e_v_num=1e-1, update_h_only=true,  γ=0.90, dτ_h_=2.5e-5)],
+                "forward-euler_CN"  => (kwargs = ((use_CFL=true,),),
+                                        work   = [5e4, 4e4, 3e4, 2e4, 1.5e4, 1.2e4]),                           # e_v_num
 
-                "RK4"               => [(set_h_bc=false, e_v_num=0., dt=1e-3),
-                                        #(set_h_bc=true,  e_v_num=0, dt=1e-3),
-                                        (set_h_bc=true,  e_v_num=0.1, dt=10)],
+                "pseudo-transient"  => (kwargs = ((e_v_num=0,    update_h_only=false, γ=0.9, dτ_h_=7.2e-6),
+                                                  (e_v_num=0,    update_h_only=true,  γ=0.9, dτ_h_=1.6e-5),
+                                                  #(e_v_num=0.2,  update_h_only=true,  γ=0.9, dτ_h_=1.6e-5),
+                                                  (e_v_num=0.2,  update_h_only=false, γ=0.9, dτ_h_=1.3e-5)),
+                                        work   = [1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8]),                         # tolerance
 
-                "RK4_piccard_loop"  => [(set_h_bc=false, e_v_num=0, dt=1e-3)]
+                "RK4"               => (kwargs = ((use_CFL=true,),),
+                                        work   = [5e5, 2e5, 1e5, 8e4, 5e4, 3e4]),                               # e_v_num
+
+                "RK4_piccard_loop"  => (kwargs = ((use_CFL=true, set_h_bc=true),),
+                                        work   = [2.2e5, 2e5])                                                  # e_v_num
 )
 
-df    = DataFrame(method=String[], kwargs=NamedTuple[], ϕ_test = Array[], h_test = Array[], rms_ϕ=Array{Float64}[], rms_h=Array{Float64}[], nit=Array{Int64}[], t_run=Array{Float64}[])
+df    = DataFrame(method=String[], kwargs=NamedTuple[], ϕ_test = Array[], h_test = Array[], rms_ϕ=Array{Float64}[], rms_h=Array{Float64}[], work=Array{Float64}[], t_run=Array{Float64}[])
 tic = Base.time()
 for method in keys(test_sets)
     include(method * ".jl")
     i = 0
-    for kwargs in test_sets[method]
+    for kwargs in test_sets[method].kwargs
         i += 1
 
         ϕ_test = Array[]
@@ -49,20 +46,17 @@ for method in keys(test_sets)
         work   = []
         t_run  = []
 
-        if any(method .== ["diffeq_explicit", "pseudo-transient"])
-            works = [1e3, 5e3, 1e4, 2e4]             # tolerance
-        else
-            works = [1e3, 5e3, 1e4, 2e4, 5e4, 1e5]   # dt
-        end
+        @printf("Running %s for test_set %d out of %d \n", method, i, length(test_sets[method].kwargs))
 
-        @printf("Running %s for test_set %d out of %d \n", method, i, length(test_sets[method]))
-
-        for w in works
-            if any(method .== ["diffeq_explicit", "pseudo-transient"])
-                ϕ, h, t = simple_sheet(; nx, ny, tol=w, kwargs...)
+        for w in test_sets[method].work
+            if method == "pseudo-transient"
+                work_kw = (;tol = w)
             else
-                ϕ, h, t = simple_sheet(; nx, ny, dt=w, kwargs...)
+                work_kw = (;e_v_num = w)
             end
+
+            ϕ, h, t = simple_sheet(; nx, ny, work_kw..., kwargs...)
+
             ϕs = section(ϕ)
             hs = section(h)
 
@@ -79,7 +73,7 @@ end
 toc = Base.time() - tic
 @printf("Executed in %f minutes.", toc/60)  # taking 52 minutes at the moment
 
-save("comparison.jld2", "df", df)
+save("comparison_test.jld2", "df", df)
 
 # basic plotting with Plots
 # all h and ϕ cross sections

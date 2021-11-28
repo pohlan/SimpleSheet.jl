@@ -23,7 +23,7 @@ const day   = 24*3600
 
     # physics
     Lx, Ly = 100e3, 20e3                  # length/width of the domain, starts at (0, 0)
-    ttot   = 1e9
+    ttot   = 8000day
     α      = 1.25
     β      = 1.5
     m      = 7.93e-11                     # source term for SHMIP A1 test case
@@ -100,7 +100,7 @@ const day   = 24*3600
     it = 0
 
     # Time loop
-    if !use_CFL @printf("Running for %d iterations. \n", nt) end
+    @printf("Running for e_v_num = %1.e \n", e_v_num)
     t_sol=@elapsed while t<ttot && it<nt
 
         h .= max.(h, 0.0)
@@ -172,4 +172,4 @@ const day   = 24*3600
     return ϕ .* ϕ_, h .* h_, t_sol
 end
 
-# ϕ, h, it, t_sol = simple_sheet(; nx=64, ny=32, itMax=10^7, dt=100, do_monit=true, set_h_bc=false, use_CFL=false, e_v_num=0.5, CN=0.)
+# ϕ, h, t_sol = simple_sheet(; nx=64, ny=32, use_CFL=true, e_v_num=1e5)

@@ -69,16 +69,17 @@ end
 end
 
 @views function simple_sheet(;  nx, ny,          # grid size
-                                itMax=10^6,           # maximal number of iterations
+                                itMax=10^6,      # maximal number of iterations
                                 dt=1e-3,         # physical time step, fixed
-                                do_monit=false,   # enable/disable plotting of intermediate results
+                                do_monit=false,  # enable/disable plotting of intermediate results
                                 set_h_bc=false,  # whether to set dirichlet bc for h (at the nodes where ϕ d. bc are set)
-                                e_v_num=0        # regularisation void ratio
+                                e_v_num=0,       # regularisation void ratio
+                                use_CFL=true     # whether dt should be adapted according to CFL condition
     )
 
     # physics
     Lx, Ly = 100e3, 20e3                  # length/width of the domain, starts at (0, 0)
-    ttot   = 1e9
+    ttot   = 8000day
     α      = 1.25
     β      = 1.5
     m      = 7.93e-11                           # source term for SHMIP A1 test case
@@ -120,6 +121,7 @@ end
     dx     = dx / x_
     dy     = dy / x_
     dt     = dt / t_
+    ttot   = ttot / t_
     H      = H ./ H_
 
     h_bc     = (Γ/Σ * (0.91 .* H[2,2] - ϕ0[2,2]).^3 .+ 1.).^(-1)   # solution for h if dhdt=0 (Σ vo = Γ vc)
@@ -153,11 +155,15 @@ end
     h = copy(h0)
 
     # Time loop
-    @printf("Running for %d iterations. \n", nt)
-    t_sol=@elapsed for it = 1:nt
+    t = 0.
+    it = 0
+    @printf("Running for e_v_num = %1.e \n", e_v_num)
+    t_sol=@elapsed while t < ttot
 
         # timestep
-        # dt = min(dx,dy)^2 ./ maximum(d_eff) ./ 4.1
+        if use_CFL && it > 0
+            dt = (e_v .+ e_v_num) .* min(dx,dy)^2 ./ max(maximum(d_eff), small) ./ 4.1
+        end
 
         compute_resid(K1_h, K1_ϕ,     h,     ϕ, dϕ_dx, dϕ_dy, gradϕ, d_eff, flux_x, flux_y, div_q, vo, vc, α, small, β, H, Σ, Γ, Λ, e_v, e_v_num, dx, dy, set_h_bc, h_bc)
         cumul_RK4!(Tmp_h, Tmp_ϕ, h, ϕ, K1_h, K1_ϕ, 0.5*dt)
@@ -171,16 +177,18 @@ end
         compute_resid(K4_h, K4_ϕ, Tmp_h, Tmp_ϕ, dϕ_dx, dϕ_dy, gradϕ, d_eff, flux_x, flux_y, div_q, vo, vc, α, small, β, H, Σ, Γ, Λ, e_v, e_v_num, dx, dy, set_h_bc, h_bc)
         update_RK4!(h, ϕ, K1_h, K1_ϕ, K2_h, K2_ϕ, K3_h, K3_ϕ, K4_h, K4_ϕ, dt, set_h_bc, h_bc)
 
+        t  += dt
+        it += 1
         if (it % nout == 0) && do_monit
             # @show dtp = min(dx,dy)^2 ./ maximum(d_eff) ./ 4.1
             # visu
-            p1 = Plt.plot(ϕ[2:end-1,end÷2])
-            p2 = Plt.plot(h[2:end-1,end÷2])
+            p1 = Plt.plot(ϕ[2:end-1,end÷2] .* ϕ_)
+            p2 = Plt.plot(h[2:end-1,end÷2] .* h_)
             Plt.display(Plt.plot(p1, p2))
-            @printf("it %d (dt = %1.3e), max(h) = %1.3f \n", it, dt, maximum(inn(h)))
+            @printf("it %d , t = %f days \n", it, t*t_/day)
         end
     end
     return ϕ .* ϕ_, h .* h_, t_sol
 end
 
-# ϕ, h, t_sol = simple_sheet(; nx=64, ny=32, itMax=10^5, do_monit=true, set_h_bc=true, e_v_num=0.1, dt=10)
+# ϕ, h, t_sol = simple_sheet(; nx=64, ny=32, use_CFL=true, do_monit=true, e_v_num=2*10^4)
