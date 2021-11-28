@@ -94,7 +94,7 @@ end
 
 fig, axs = subplots(1, 2, figsize=(15,10))
 fig.subplots_adjust(hspace=0.3, wspace=0.3)
-for method in ["RK4_piccard_loop"] #methods
+for method in methods
     i = findall(df.method .== method)
     ϕ_test = [df.ϕ_test[n][end] for n in i]
     h_test = [df.h_test[n][end] for n in i]
