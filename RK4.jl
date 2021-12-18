@@ -11,15 +11,12 @@ import Plots; Plt = Plots
 const small = eps(Float64)
 const day   = 24*3600
 
-@views function compute_resid(Ki_h, Ki_ϕ, h, ϕ, dϕ_dx, dϕ_dy, gradϕ, d_eff, flux_x, flux_y, div_q, vo, vc, α, small, β, H, Σ, Γ, Λ, e_v, e_v_num, dx, dy, set_h_bc, h_bc)
+@views function compute_resid(Ki_h, Ki_ϕ, h, ϕ, dϕ_dx, dϕ_dy, gradϕ, d_eff, flux_x, flux_y, div_q, vo, vc, α, small, β, H, Σ, Γ, Λ, Ψ, e_v_num, dx, dy)
 
     h .= max.(h, 0.0)
 
     # dirichlet boundary conditions to pw = 0
     ϕ[2,:] .= 0.0
-    if set_h_bc
-        h[2,:] .= h_bc
-    end
 
     # d_eff
     dϕ_dx  .= diff(ϕ,dims=1) ./ dx
@@ -36,16 +33,12 @@ const day   = 24*3600
     flux_y .= .- d_eff[:,2:end] .* max.(dϕ_dy, 0.0) .- d_eff[:,1:end-1] .* min.(dϕ_dy, 0.0)
     div_q  .= diff(flux_x[:,2:end-1],dims=1) ./ dx .+ diff(flux_y[2:end-1,:],dims=2) ./ dy
     vo     .= (h .< 1.0) .* (1.0 .- h)
-    vc     .=  h .* (0.91 .* H .- ϕ).^3
+    vc     .=  h .* (H .- ϕ).^3
 
     Ki_h      .= Σ .* inn(vo) .- Γ .* inn(vc)
-    Ki_ϕ      .= (- div_q .- Ki_h .+ Λ) ./ max(e_v + e_v_num, small)
+    Ki_ϕ      .= (- div_q .- Ki_h .+ Λ) ./ Ψ
     Ki_ϕ[1,:] .= 0.
     Ki_h     .+= e_v_num .* Ki_ϕ
-
-    if set_h_bc
-        Ki_h[1,:] .= h_bc
-    end
     return
 end
 
@@ -55,16 +48,13 @@ end
     return
 end
 
-@views function update_RK4!(h, ϕ, K1_h, K1_ϕ, K2_h, K2_ϕ, K3_h, K3_ϕ, K4_h, K4_ϕ, dt, set_h_bc, h_bc)
+@views function update_RK4!(h, ϕ, K1_h, K1_ϕ, K2_h, K2_ϕ, K3_h, K3_ϕ, K4_h, K4_ϕ, dt)
     inn(h) .= inn(h) .+ dt .* (K1_h .+ 2.0 .* K2_h .+ 2.0 .* K3_h .+ K4_h) ./ 6.0
     inn(ϕ) .= inn(ϕ) .+ dt .* (K1_ϕ .+ 2.0 .* K2_ϕ .+ 2.0 .* K3_ϕ .+ K4_ϕ) ./ 6.0
 
     h .= max.(h, 0.0)
     # dirichlet boundary conditions to pw = 0
     ϕ[2,:] .= 0.0
-    if set_h_bc
-        h[2,:] .= h_bc
-    end
     return
 end
 
@@ -72,7 +62,6 @@ end
                                 itMax=10^6,      # maximal number of iterations
                                 dt=1e-3,         # physical time step, fixed
                                 do_monit=false,  # enable/disable plotting of intermediate results
-                                set_h_bc=false,  # whether to set dirichlet bc for h (at the nodes where ϕ d. bc are set)
                                 e_v_num=0,       # regularisation void ratio
                                 use_CFL=true     # whether dt should be adapted according to CFL condition
     )
@@ -105,12 +94,13 @@ end
     inn(h0) .= 0.04
 
     # scaling factors
-    H_     = 1000.0
-    ϕ_     = 9.81 * 910 * H_
+    H_     = mean(H)
+    ϕ_     = 9.8 * 910 * H_
     h_     = 0.1
     x_     = max(Lx, Ly)
     q_     = 0.005 * h_^α * (ϕ_ / x_)^(β-1)
     t_     = h_ * x_ / q_
+    Ψ      = max(e_v .+ e_v_num, small) * ϕ_ / (1000 * 9.8 * h_)
     Σ      = 5e-8 * x_ / q_
     Γ      = 3.375e-25 * ϕ_^3 * x_ / q_ * 2/27  # the last bit is 2/n^n from vc
     Λ      = m * x_ / q_
@@ -123,11 +113,6 @@ end
     dt     = dt / t_
     ttot   = ttot / t_
     H      = H ./ H_
-
-    h_bc     = (Γ/Σ * (0.91 .* H[2,2] - ϕ0[2,2]).^3 .+ 1.).^(-1)   # solution for h if dhdt=0 (Σ vo = Γ vc)
-    if set_h_bc
-        h0[2,:] .= h_bc
-    end
 
     # array allocation
     dϕ_dx  = zeros(nx-1,ny  )
@@ -162,20 +147,20 @@ end
 
         # timestep
         if use_CFL && it > 0
-            dt = (e_v .+ e_v_num) .* min(dx,dy)^2 ./ max(maximum(d_eff), small) ./ 4.1
+            dt = Ψ .* min(dx,dy)^2 ./ max(maximum(d_eff), small) ./ 4.1
         end
 
-        compute_resid(K1_h, K1_ϕ,     h,     ϕ, dϕ_dx, dϕ_dy, gradϕ, d_eff, flux_x, flux_y, div_q, vo, vc, α, small, β, H, Σ, Γ, Λ, e_v, e_v_num, dx, dy, set_h_bc, h_bc)
+        compute_resid(K1_h, K1_ϕ,     h,     ϕ, dϕ_dx, dϕ_dy, gradϕ, d_eff, flux_x, flux_y, div_q, vo, vc, α, small, β, H, Σ, Γ, Λ, Ψ, e_v_num, dx, dy)
         cumul_RK4!(Tmp_h, Tmp_ϕ, h, ϕ, K1_h, K1_ϕ, 0.5*dt)
 
-        compute_resid(K2_h, K2_ϕ, Tmp_h, Tmp_ϕ, dϕ_dx, dϕ_dy, gradϕ, d_eff, flux_x, flux_y, div_q, vo, vc, α, small, β, H, Σ, Γ, Λ, e_v, e_v_num, dx, dy, set_h_bc, h_bc)
+        compute_resid(K2_h, K2_ϕ, Tmp_h, Tmp_ϕ, dϕ_dx, dϕ_dy, gradϕ, d_eff, flux_x, flux_y, div_q, vo, vc, α, small, β, H, Σ, Γ, Λ, Ψ, e_v_num, dx, dy)
         cumul_RK4!(Tmp_h, Tmp_ϕ, h, ϕ, K2_h, K2_ϕ, 0.5*dt)
 
-        compute_resid(K3_h, K3_ϕ, Tmp_h, Tmp_ϕ, dϕ_dx, dϕ_dy, gradϕ, d_eff, flux_x, flux_y, div_q, vo, vc, α, small, β, H, Σ, Γ, Λ, e_v, e_v_num, dx, dy, set_h_bc, h_bc)
+        compute_resid(K3_h, K3_ϕ, Tmp_h, Tmp_ϕ, dϕ_dx, dϕ_dy, gradϕ, d_eff, flux_x, flux_y, div_q, vo, vc, α, small, β, H, Σ, Γ, Λ, Ψ, e_v_num, dx, dy)
         cumul_RK4!(Tmp_h, Tmp_ϕ, h, ϕ, K3_h, K3_ϕ, dt)
 
-        compute_resid(K4_h, K4_ϕ, Tmp_h, Tmp_ϕ, dϕ_dx, dϕ_dy, gradϕ, d_eff, flux_x, flux_y, div_q, vo, vc, α, small, β, H, Σ, Γ, Λ, e_v, e_v_num, dx, dy, set_h_bc, h_bc)
-        update_RK4!(h, ϕ, K1_h, K1_ϕ, K2_h, K2_ϕ, K3_h, K3_ϕ, K4_h, K4_ϕ, dt, set_h_bc, h_bc)
+        compute_resid(K4_h, K4_ϕ, Tmp_h, Tmp_ϕ, dϕ_dx, dϕ_dy, gradϕ, d_eff, flux_x, flux_y, div_q, vo, vc, α, small, β, H, Σ, Γ, Λ, Ψ, e_v_num, dx, dy)
+        update_RK4!(h, ϕ, K1_h, K1_ϕ, K2_h, K2_ϕ, K3_h, K3_ϕ, K4_h, K4_ϕ, dt)
 
         t  += dt
         it += 1
@@ -191,4 +176,4 @@ end
     return ϕ .* ϕ_, h .* h_, t_sol
 end
 
-# ϕ, h, t_sol = simple_sheet(; nx=64, ny=32, use_CFL=true, do_monit=true, e_v_num=2*10^4)
+# ϕ, h, t_sol = simple_sheet(; nx=64, ny=32, use_CFL=true, do_monit=true, e_v_num=10)

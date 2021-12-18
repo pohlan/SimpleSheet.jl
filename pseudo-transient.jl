@@ -14,10 +14,9 @@ const day   = 24*3600
 @views function simple_sheet(;  nx, ny,                 # grid size
                                 itMax=10^7,             # maximal number of iterations
                                 tol=1e-6,               # tolerance, convergence criterion
-                                γ,                      # damping parameter (γ_h = γ_ϕ)
-                                dτ_h_,                  # pseudo-time step for h
+                                γ=0.8,                  # damping parameter (γ_h = γ_ϕ)
+                                dτ_h_=1.6e-5,             # pseudo-time step for h
                                 do_monit=false,         # enable/disable plotting of intermediate results
-                                set_h_bc=false,         # whether to set dirichlet bc for h (at the nodes where ϕ d. bc are set)
                                 e_v_num=0,              # regularisation void ratio
                                 update_h_only=false     # true: split step scheme, only update h in the beginning
                                 )
@@ -57,12 +56,13 @@ const day   = 24*3600
     inn(h0) .= 0.04
 
     # scaling factors
-    H_     = maximum(H)        # the choice of H_ also has an impact on convergence and on optimal γ etc.; in SheetModel H_ = mean(H)
-    ϕ_     = 9.81 * 910 * H_
+    H_     = mean(H)        # the choice of H_ also has an impact on convergence and on optimal γ etc.; in SheetModel H_ = mean(H)
+    ϕ_     = 9.8 * 910 * H_
     h_     = 0.1
     x_     = max(Lx, Ly)
     q_     = 0.005 * h_^α * (ϕ_ / x_)^(β-1)
     t_     = h_ * x_ / q_
+    Ψ      = max(e_v + e_v_num, small) * ϕ_ / (1000 * 9.8 * h_)
     Σ      = 5e-8 * x_ / q_
     Γ      = 3.375e-25 * ϕ_^3 * x_ / q_ * 2/27  # the last bit is 2/n^n from vc
     Λ      = m * x_ / q_
@@ -75,11 +75,6 @@ const day   = 24*3600
     dt     = dt / t_
     dt_h   = dt_h / t_
     H      = H ./ H_
-
-    if set_h_bc
-        h_bc     = (Γ/Σ * (0.91 .* H[2,2] - ϕ0[2,2]).^3 .+ 1.).^(-1)   # solution for h if dhdt=0 (Σ vo = Γ vc)
-        h0[2,:] .= h_bc
-    end
 
     # array allocation
     dϕ_dx   = zeros(nx-1,ny  )
@@ -115,7 +110,7 @@ const day   = 24*3600
     iter  = 0.
 
     # PT iteration loop
-    t_sol = @elapsed while iter<itMax && max(err_ϕ, err_h) > tol
+    t_sol = @elapsed while iter<itMax && max(err_ϕ, err_h) > tol&& !any(isnan.([err_ϕ, err_h]))
         h .= max.(h, 0.0)
 
         if  iter < 100 && update_h_only # once update_h_only = false it cannot go back
@@ -129,9 +124,6 @@ const day   = 24*3600
 
         # boundary conditions
         ϕ[2, :] .= 0.0
-        if set_h_bc
-            h[2, :] .= h_bc
-        end
 
         # d_eff
         dϕ_dx  .= diff(ϕ,dims=1) ./ dx
@@ -149,22 +141,23 @@ const day   = 24*3600
         ux     .= av_xi(flux_x) ./ (inn(h) .+ small)  # dividing by zero gives NaN
         uy     .= av_yi(flux_y) ./ (inn(h) .+ small)
         vo     .= (h .< 1.0) .* (1.0 .- h)
-        vc     .= h .* (0.91 .* H .- ϕ).^3            # for ϕ = +/-Inf this gives NaN even if h=0
+        vc     .= h .* (H .- ϕ).^3            # for ϕ = +/-Inf this gives NaN even if h=0
         div_q  .= diff(flux_x[:,2:end-1],dims=1) ./ dx .+ diff(flux_y[2:end-1,:],dims=2) ./ dy
 
         # residuals
         dhdt         .= Σ .* inn(vo) .- Γ .* inn(vc)
         dϕdt_ev      .= (.- div_q .- dhdt .+ Λ)           # note: this is dϕdt * (e_v + e_vnum); for the case e_v == e_v_num == 0 it is more convenient this way
         dϕdt_ev[1,:] .= 0.                                # Dirichlet B.C. points, important for next line if e_v_num > 0
-        dhdt        .+= e_v_num / (e_v + e_v_num) .* dϕdt_ev
+        dhdt        .+= e_v_num / Ψ .* dϕdt_ev
 
-        Res_ϕ  .= - (e_v + e_v_num) * (inn(ϕ) .- inn(ϕ0)) ./ dt  .+ dϕdt_ev
-        Res_h  .= - (inn(h) .- inn(h0)) ./ dt .+ dhdt
+        # Res_ϕ  .= - Ψ * (inn(ϕ) .- inn(ϕ0)) ./ dt  .+ dϕdt_ev
+        # Res_h  .= - (inn(h) .- inn(h0)) ./ dt .+ dhdt
+
+        # solve for steady-state directly
+        Res_ϕ  .= dϕdt_ev
+        Res_h  .= dhdt
 
         Res_ϕ[1, :] .= 0.      # Dirichlet B.C. points, no update
-        if set_h_bc
-            Res_h[1, :] .= 0.
-        end
 
         # rate of change
         dhdτ   .= Res_h .+ γ_h .* dhdτ
@@ -210,7 +203,11 @@ const day   = 24*3600
         end
     end
 
-    return ϕ * ϕ_, h * h_, t_sol
+    #p1 = Plt.plot(iters, errs_ϕ, xlabel="# iterations", title="residual error", label="err_ϕ", yscale=:log10)
+    #p2 = Plt.plot(iters, errs_h, xlabel="# iterations", title="residual error", label="err_h", yscale=:log10)
+    #Plt.display(Plt.plot(p1,p2))
+
+    return ϕ * ϕ_, h * h_, iter, t_sol
 end
 
-# ϕ, h, t_sol = simple_sheet(; nx=64, ny=32, e_v_num=0,    update_h_only=false, γ=0.9, dτ_h_=7.2e-6, tol=1e-3, do_monit=true)
+# ϕ, h, iter, t_sol = simple_sheet(; nx=64, ny=32, e_v_num=0., update_h_only=true,  γ=0.8, dτ_h_=1.6e-5, itMax=2*10^4, do_monit=true)

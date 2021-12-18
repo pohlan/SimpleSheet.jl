@@ -71,7 +71,7 @@ for method in methods
     # axs[1].set_xscale("log")
     axs[1].set_yscale("log")
     axs[1].set_xlabel("Wall time (min)")
-    axs[1].set_ylabel(L"$\mathrm{RMS}_ϕ$ / $\mathrm{RMS}_{ϕ_\mathrm{ref}}$") # RMS($ϕ_\text{test}$ - $ϕ_\text{ref}$)
+    axs[1].set_ylabel(L"$\mathrm{RMS}_{\delta ϕ}$ / $\mathrm{RMS}_{ϕ_\mathrm{ref}}$") # RMS($ϕ_\text{test}$ - $ϕ_\text{ref}$)
     axs[1].set_title(L"ϕ")
 
     axs[1].legend([kw_lines[m] for m in keys(kw_lines)], collect(keys(kw_lines)),
@@ -84,7 +84,7 @@ for method in methods
     # axs[2].set_xscale("log")
     axs[2].set_yscale("log")
     axs[2].set_xlabel("Wall time (min)")
-    axs[2].set_ylabel(L"$\mathrm{RMS}_h$ / $\mathrm{RMS}_{h_\mathrm{ref}}$")
+    axs[2].set_ylabel(L"$\mathrm{RMS}_{\delta h}$ / $\mathrm{RMS}_{h_\mathrm{ref}}$")
     axs[2].set_title(L"h")
 
     axs[2].legend([line_styles[m] for m in methods], methods[1:end-1],

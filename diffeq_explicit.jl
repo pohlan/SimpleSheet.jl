@@ -19,7 +19,6 @@ const small    = eps(Float64)
 const day      = 3600*24
 
 function make_ode_reg(; nx, ny,                 # grid size
-                        set_h_bc=false,         # whether to set dirichlet bc for h (at the nodes where ϕ d. bc are set)
                         e_v_num=0               # regularization void ratio
                         )
     # physics
@@ -32,17 +31,6 @@ function make_ode_reg(; nx, ny,                 # grid size
     # numerics
     dx, dy = Lx / (nx-3), Ly / (ny-3)     # the outermost points are ghost points
     xc, yc = LinRange(-dx, Lx+dx, nx), LinRange(-dy, Ly+dy, ny)
-
-    # scaling factors
-    H_     = 1000.0
-    ϕ_     = 9.81 * 910 * H_
-    h_     = 0.1
-    x_     = max(Lx, Ly)
-    q_     = 0.005 * h_^α * (ϕ_ / x_)^(β-1)
-    t_     = h_ * x_ / q_
-    Σ      = 5e-8 * x_ / q_
-    Γ      = 3.375e-25 * ϕ_^3 * x_ / q_ * 2/27  # the last bit is 2/n^n from vc
-    Λ      = m * x_ / q_
 
     # ice thickness
     H           = zeros(nx, ny)
@@ -57,17 +45,24 @@ function make_ode_reg(; nx, ny,                 # grid size
     h0       = zeros(nx, ny)
     inn(h0) .= 0.04
 
+    # scaling factors
+    H_     = mean(H)
+    ϕ_     = 9.8 * 910 * H_
+    h_     = 0.1
+    x_     = max(Lx, Ly)
+    q_     = 0.005 * h_^α * (ϕ_ / x_)^(β-1)
+    t_     = h_ * x_ / q_
+    Ψ      = max(e_v .+ e_v_num, small) * ϕ_ / (1000 * 9.8 * h_)
+    Σ      = 5e-8 * x_ / q_
+    Γ      = 3.375e-25 * ϕ_^3 * x_ / q_ * 2/27  # the last bit is 2/n^n from vc
+    Λ      = m * x_ / q_
+
     # apply the scaling
     ϕ0     = ϕ0 ./ ϕ_
     h0     = h0 ./ h_
     dx     = dx / x_
     dy     = dy / x_
     H      = H ./ H_
-
-    if set_h_bc
-        h_bc     = (Γ/Σ * (0.91 .* H[2,2] - ϕ0[2,2]).^3 .+ 1.).^(-1)   # solution for h if dhdt=0 (Σ vo = Γ vc)
-        h0[2,:] .= h_bc
-    end
 
     # array allocationsize(Λ)
     dϕ_dx  = zeros(nx-1,ny  )
@@ -92,13 +87,6 @@ function make_ode_reg(; nx, ny,                 # grid size
             # alternative:
             #h .= abs.(h)
 
-            # dirichlet boundary conditions to pw = 0
-            ϕ[2,:] .= 0.0
-            if set_h_bc
-                h[2,:] .= h_bc
-            end
-
-
             dhdt = du.x[1]
             dϕdt = du.x[2]
 
@@ -117,15 +105,12 @@ function make_ode_reg(; nx, ny,                 # grid size
             flux_y .= .- d_eff[:,2:end] .* max.(dϕ_dy, 0.0) .- d_eff[:,1:end-1] .* min.(dϕ_dy, 0.0)
             div_q  .= (diff(flux_x[:,2:end-1],dims=1) ./ dx .+ diff(flux_y[2:end-1,:],dims=2) ./ dy)
             vo     .= (h .< 1.0) .* (1.0 .- h)
-            vc     .=  h .* (0.91 .* H .- ϕ).^3
+            vc     .=  h .* (H .- ϕ).^3
 
             dhdt      .= (Σ .* vo .- Γ .* vc)
-            inn(dϕdt) .= (.- div_q .- inn(dhdt) .+ Λ) ./ max.(e_v .+ e_v_num, small)
+            inn(dϕdt) .= (.- div_q .- inn(dhdt) .+ Λ) ./ Ψ
             dϕdt[2,:] .= 0 # BCs, fixes https://github.com/pohlan/SimpleSheet.jl/pull/4#issue-1041245216
             dhdt     .+= e_v_num.*dϕdt
-            if set_h_bc
-                dhdt[2,:] .= 0
-            end
 
             # ghost point boundaries
             dϕdt[[1,end],:] .= 0.0
@@ -139,9 +124,9 @@ function make_ode_reg(; nx, ny,                 # grid size
     return ode!, copy(ϕ0), copy(h0), (;ϕ_, h_, x_, q_, t_, H_, Σ, Γ, Λ), H
 end
 
-function simple_sheet(; nx, ny, tol=1e-8, set_h_bc=false, e_v_num=0, do_plots=false, itMax=10^6)
+function simple_sheet(; nx, ny, tol=1e-8, e_v_num=0, do_plots=false, itMax=10^6)
     @printf("Running for e_v_num = %1.e \n", e_v_num)
-    ode!, ϕ0, h0, scales, H = make_ode_reg(; nx, ny, set_h_bc, e_v_num)
+    ode!, ϕ0, h0, scales, H = make_ode_reg(; nx, ny, e_v_num)
     tspan = (0, 8000day / scales.t_)
     u0 = ArrayPartition(h0, ϕ0)
     du0 = ArrayPartition(copy(h0), copy(ϕ0))
@@ -184,4 +169,4 @@ function simple_sheet(; nx, ny, tol=1e-8, set_h_bc=false, e_v_num=0, do_plots=fa
     return ϕ, h, toc
 end
 
-# ϕ, h, toc = simple_sheet(nx=64, ny=32, set_h_bc=false, tol=1e-8, e_v_num=10, do_plots=true)
+# ϕ, h, toc = simple_sheet(nx=64, ny=32, tol=1e-8, e_v_num=1e-3, do_plots=true)

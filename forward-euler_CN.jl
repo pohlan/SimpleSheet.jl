@@ -12,10 +12,9 @@ const small = eps(Float64)
 const day   = 24*3600
 
 @views function simple_sheet(;  nx, ny,          # grid size
-                                itMax=1e6,       # maximal number of iterations
+                                itMax=10^7,      # maximal number of iterations
                                 dt=1e-3,         # physical time step, fixed
                                 do_monit=false,  # enable/disable plotting of intermediate results
-                                set_h_bc=false,  # whether to set dirichlet bc for h (at the nodes where ϕ d. bc are set)
                                 e_v_num=0,       # regularisation void ratio
                                 use_CFL=false,   # true: use CFL criterion for dt, false: use fixed dt=1s
                                 CN=0             # Crank-Nicolson (CN=0.5), Forward Euler (CN=0)
@@ -51,12 +50,13 @@ const day   = 24*3600
     inn(h0) .= 0.04
 
     # scaling factors
-    H_     = 1000.0
-    ϕ_     = 9.81 * 910 * H_
+    H_     = mean(H)
+    ϕ_     = 9.8 * 910 * H_
     h_     = 0.1
     x_     = max(Lx, Ly)
     q_     = 0.005 * h_^α * (ϕ_ / x_)^(β-1)
     t_     = h_ * x_ / q_
+    Ψ      = max(e_v .+ e_v_num, small) * ϕ_ / (1000 * 9.8 * h_)
     Σ      = 5e-8 * x_ / q_
     Γ      = 3.375e-25 * ϕ_^3 * x_ / q_ * 2/27  # the last bit is 2/n^n from vc
     Λ      = m * x_ / q_
@@ -69,11 +69,6 @@ const day   = 24*3600
     dt     = dt / t_
     ttot   = ttot / t_
     H      = H ./ H_
-
-    if set_h_bc
-        h_bc     = (Γ/Σ * (0.91 .* H[2,2] - ϕ0[2,2]).^3 .+ 1.).^(-1)   # solution for h if dhdt=0 (Σ vo = Γ vc)
-        h0[2,:] .= h_bc
-    end
 
     # array allocation
     dϕ_dx  = zeros(nx-1,ny  )
@@ -107,9 +102,6 @@ const day   = 24*3600
 
         # dirichlet boundary conditions to pw = 0
         ϕ[1:2,:] .= 0.0
-        if set_h_bc
-            h[2,:] .= h_bc
-        end
 
         # d_eff
         dϕ_dx  .= diff(ϕ,dims=1) ./ dx
@@ -125,19 +117,15 @@ const day   = 24*3600
         flux_x .= .- d_eff[2:end,:] .* max.(dϕ_dx, 0.0) .- d_eff[1:end-1,:] .* min.(dϕ_dx, 0.0)
         flux_y .= .- d_eff[:,2:end] .* max.(dϕ_dy, 0.0) .- d_eff[:,1:end-1] .* min.(dϕ_dy, 0.0)
         vo     .= (h .< 1.0) .* (1.0 .- h)
-        vc     .=  h .* (0.91 .* H .- ϕ).^3
+        vc     .=  h .* (H .- ϕ).^3
         div_q  .= diff(flux_x[:,2:end-1],dims=1) ./ dx .+ diff(flux_y[2:end-1,:],dims=2) ./ dy
         # ux     .= av_xi(flux_x) ./ inn(h)
         # uy     .= av_yi(flux_y) ./ inn(h)
 
         dhdt      .= Σ .* inn(vo) .- Γ .* inn(vc)
-        dϕdt      .= (- div_q .- dhdt .+ Λ) ./ max.(e_v .+ e_v_num, small)
+        dϕdt      .= (- div_q .- dhdt .+ Λ) ./ Ψ
         dϕdt[1,:] .= 0                    # Dirichlet B.C. points
         dhdt     .+= e_v_num .* dϕdt
-
-        if set_h_bc
-            dhdt[1,:] .= 0
-        end
 
         # timestep
         # dt_ϕ = e_v .* min(dx,dy)^2 ./ maximum(d_eff) ./ 4.1
@@ -145,7 +133,7 @@ const day   = 24*3600
         # dt = min(dt_ϕ, dt_h)
 
         if use_CFL
-            dt = (e_v .+ e_v_num) .* min(dx,dy)^2 ./ maximum(d_eff) ./ 4.1   # time step much smaller than dt=1s
+            dt = Ψ .* min(dx,dy)^2 ./ maximum(d_eff) ./ 4.1   # time step much smaller than dt=1s
         end
 
         # updates
@@ -172,4 +160,4 @@ const day   = 24*3600
     return ϕ .* ϕ_, h .* h_, t_sol
 end
 
-# ϕ, h, t_sol = simple_sheet(; nx=64, ny=32, use_CFL=true, e_v_num=1e5)
+# ϕ, h, t_sol = simple_sheet(; nx=64, ny=32, use_CFL=true, e_v_num=10, do_monit=true, itMax=10^5)
