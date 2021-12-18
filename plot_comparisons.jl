@@ -3,7 +3,7 @@ using JLD2, DataFrames, PyPlot, LaTeXStrings, LinearAlgebra
 # get SimpleSheet model results
 if !isfile("comparison.jld2")
     println("The comparison file doesn't exist. Run comparison.jl!")
-elseif !@isdefined(df)
+else
     df = load("comparison.jld2", "df")
 end
 
@@ -16,10 +16,10 @@ h_ref = get_h_ref(xs)
 rms_ϕ_ref = norm(ϕ_ref) / sqrt(length(ϕ_ref))
 rms_h_ref = norm(h_ref) / sqrt(length(h_ref))
 
-rm_points(A, n) = A[1:end-n]
+rm_points(A, n) = A[1+n:end]
 
 rcParams = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
-rcParams["font.size"] = 24
+rcParams["font.size"] = 27
 
 L2D = PyPlot.matplotlib.lines.Line2D
 methods = [ "RK4",
@@ -62,29 +62,33 @@ for method in methods
     col = line_styles[method].get_color()
     lw  = line_styles[method].get_lw()
 
-    if method == "forward-euler_CN" || method == "RK4"
-        axs[1].plot.(rm_points.(df.t_run[i], 2)./60, rm_points.(df.rms_ϕ[i], 2) ./ rms_ϕ_ref, get_style(method, df.kwargs), color=col, lw=lw, label=method)
+    if method == "forward-euler_CN"
+        axs[1].plot.(rm_points.(df.t_run[i], 3), rm_points.(df.rms_ϕ[i], 3) ./ rms_ϕ_ref, get_style(method, df.kwargs), color=col, lw=lw, label=method)
     else
-        axs[1].plot.(df.t_run[i]./60, df.rms_ϕ[i] ./ rms_ϕ_ref, get_style.(method, df.kwargs[i]), color=col, lw=lw, label=method)
+       axs[1].plot.(df.t_run[i], df.rms_ϕ[i] ./ rms_ϕ_ref, get_style.(method, df.kwargs[i]), color=col, lw=lw, label=method)
     end
 
-    # axs[1].set_xscale("log")
+    axs[1].set_xscale("log")
     axs[1].set_yscale("log")
-    axs[1].set_xlabel("Wall time (min)")
-    axs[1].set_ylabel(L"$\mathrm{RMS}_{\delta ϕ}$ / $\mathrm{RMS}_{ϕ_\mathrm{ref}}$") # RMS($ϕ_\text{test}$ - $ϕ_\text{ref}$)
+    axs[1].set_xlabel("Wall time (s)")
+    axs[1].set_ylabel(L"$\mathrm{RMS}(\delta ϕ)$ / $\mathrm{RMS}(ϕ_\mathrm{ref})$") # RMS($ϕ_\text{test}$ - $ϕ_\text{ref}$)
     axs[1].set_title(L"ϕ")
 
     axs[1].legend([kw_lines[m] for m in keys(kw_lines)], collect(keys(kw_lines)),
                   title="Pseudo-transient",
                   title_fontsize="small",
                   fontsize="small",
-                  loc=(0.5, 0.2))
+                  loc=(0.45, 0.3))
 
-    axs[2].plot.(df.t_run[i]./60, df.rms_h[i] ./ rms_h_ref, get_style.(method, df.kwargs[i]), color=col, lw=lw)
-    # axs[2].set_xscale("log")
+    if method == "forward-euler_CN"
+        axs[2].plot.(rm_points.(df.t_run[i], 3), rm_points.(df.rms_h[i], 3) ./ rms_h_ref, get_style(method, df.kwargs), color=col, lw=lw, label=method)
+    else
+        axs[2].plot.(df.t_run[i], df.rms_h[i] ./ rms_h_ref, get_style.(method, df.kwargs[i]), color=col, lw=lw)
+    end
+    axs[2].set_xscale("log")
     axs[2].set_yscale("log")
-    axs[2].set_xlabel("Wall time (min)")
-    axs[2].set_ylabel(L"$\mathrm{RMS}_{\delta h}$ / $\mathrm{RMS}_{h_\mathrm{ref}}$")
+    axs[2].set_xlabel("Wall time (s)")
+    axs[2].set_ylabel(L"$\mathrm{RMS}(\delta h)$ / $\mathrm{RMS}(h_\mathrm{ref})$")
     axs[2].set_title(L"h")
 
     axs[2].legend([line_styles[m] for m in methods], methods[1:end-1],

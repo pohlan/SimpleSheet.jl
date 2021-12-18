@@ -110,7 +110,8 @@ const day   = 24*3600
     iter  = 0.
 
     # PT iteration loop
-    t_sol = @elapsed while iter<itMax && max(err_ϕ, err_h) > tol&& !any(isnan.([err_ϕ, err_h]))
+    tic = Base.time()
+    while iter<itMax && max(err_ϕ, err_h) > tol && !any(isnan.([err_ϕ, err_h]))
         h .= max.(h, 0.0)
 
         if  iter < 100 && update_h_only # once update_h_only = false it cannot go back
@@ -202,12 +203,12 @@ const day   = 24*3600
             end
         end
     end
-
+    t_sol = Base.time() - tic
     #p1 = Plt.plot(iters, errs_ϕ, xlabel="# iterations", title="residual error", label="err_ϕ", yscale=:log10)
     #p2 = Plt.plot(iters, errs_h, xlabel="# iterations", title="residual error", label="err_h", yscale=:log10)
     #Plt.display(Plt.plot(p1,p2))
 
-    return ϕ * ϕ_, h * h_, iter, t_sol
+    return ϕ * ϕ_, h * h_, t_sol
 end
 
 # ϕ, h, iter, t_sol = simple_sheet(; nx=64, ny=32, e_v_num=0., update_h_only=true,  γ=0.8, dτ_h_=1.6e-5, itMax=2*10^4, do_monit=true)

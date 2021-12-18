@@ -75,7 +75,7 @@ end
     e_v    = 1e-6                               # void ratio for englacial storage
 
     # numerics
-    nout   = 10
+    nout   = 1000
     # derived
     nt     = min(Int(ttot ÷ dt), itMax)
     dx, dy = Lx / (nx-3), Ly / (ny-3)           # the outermost points are ghost points
