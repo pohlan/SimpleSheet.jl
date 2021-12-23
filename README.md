@@ -18,7 +18,9 @@ In any case this scheme takes a long time because the time steps are so small, n
 The split step scheme only works for the 64x32 grid, but there it goes to steady state very fast.
 
 ### DifferentialEquations.jl
-*diffeq_explicit.jl*
+*diffeq_explicit.jl* : explicit ROCK4 solver
+*diffeq_implicit.jl* : implicit TRBDF2 solver
+*diffeq_impl-sundials.jl* : implicit sundial solvers
 - `e_v_num`
 
 ### Runke-Kutta
